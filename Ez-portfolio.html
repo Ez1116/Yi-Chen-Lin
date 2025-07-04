@@ -626,7 +626,7 @@
             max-width: 1200px;
             margin: 0 auto;
             display: flex;
-            justify-content: center;
+            justify-content: space-between;
             align-items: center;
             padding: 25px 0;
             border-top: 3px solid #1f2937;
@@ -847,6 +847,19 @@
             transform: translateY(-2px);
         }
         
+        /* 版權宣告 */
+        .copyright {
+            font-size: 12px;
+            color: #6b7280;
+            font-family: 'Inter', sans-serif;
+            font-weight: 400;
+            transition: color 0.3s ease;
+        }
+        
+        .copyright:hover {
+            color: #4A90E2;
+        }
+        
         /* 響應式設計 */
         @media (max-width: 768px) {
             .work-grid {
@@ -1056,6 +1069,17 @@
             .work-card .card-shadow {
                 transform: translateY(3px) translateX(3px);
             }
+            
+            /* 手機版版權宣告調整 */
+            .copyright {
+                font-size: 11px;
+            }
+            
+            .footer-content {
+                flex-direction: column;
+                gap: 15px;
+                text-align: center;
+            }
         }
     </style>
 </head>
@@ -1212,6 +1236,7 @@
                 <div class="footer-links">
                     <button class="footer-link" onclick="showPage('developer')" style="background: none; border: none; cursor: pointer; font-family: inherit;">Developer</button>
                 </div>
+                <div class="copyright">© Yi-Chen Lin 2025</div>
             </div>
         </div>
     </div>
@@ -1295,6 +1320,7 @@
                 <div class="footer-links">
                     <button class="footer-link" onclick="showPage('developer')" style="background: none; border: none; cursor: pointer; font-family: inherit;">Developer</button>
                 </div>
+                <div class="copyright">© Yi-Chen Lin 2025</div>
             </div>
         </div>
     </div>
@@ -1322,6 +1348,7 @@
                 <div class="footer-links">
                     <button class="footer-link" onclick="showPage('developer')" style="background: none; border: none; cursor: pointer; font-family: inherit;">Developer</button>
                 </div>
+                <div class="copyright">© Yi-Chen Lin 2025</div>
             </div>
         </div>
     </div>
