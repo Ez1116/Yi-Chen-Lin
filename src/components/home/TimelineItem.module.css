@@ -1,0 +1,151 @@
+.timelineItem {
+  position: relative;
+  margin-bottom: 80px;
+  display: flex;
+  align-items: center;
+}
+
+.timelineItem.odd {
+  justify-content: flex-start;
+}
+
+.timelineItem.even {
+  justify-content: flex-end;
+}
+
+.timelineMarker {
+  position: absolute;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  background: white;
+  border: 4px solid #4A90E2;
+  border-radius: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+}
+
+.timelineCard {
+  position: relative;
+  width: calc(50% - 40px);
+  margin: 0 20px;
+}
+
+.cardShadow {
+  background: #1f2937;
+  transform: translateY(4px) translateX(4px);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: 12px;
+  z-index: 1;
+}
+
+.cardContent {
+  background: white;
+  border: 3px solid #1f2937;
+  padding: 30px;
+  text-align: left;
+  position: relative;
+  z-index: 10;
+  border-radius: 12px;
+  transition: all 0.3s ease;
+}
+
+.timelineCard:hover .cardContent {
+  transform: translateY(-2px) translateX(-2px);
+}
+
+.workHeader {
+  margin-bottom: 20px;
+}
+
+.jobTitle {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 10px 0;
+}
+
+.date {
+  font-size: 1rem;
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.company {
+  font-size: 1.1rem;
+  color: #1f2937;
+  font-weight: 500;
+  margin-bottom: 25px;
+  line-height: 1.4;
+  white-space: pre-line;
+}
+
+.workDetails {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.workDetails li {
+  font-size: 1rem;
+  color: #4b5563;
+  line-height: 1.8;
+  margin-bottom: 15px;
+  padding-left: 20px;
+  position: relative;
+}
+
+.workDetails li::before {
+  content: '•';
+  position: absolute;
+  left: 0;
+  color: #6b7280;
+}
+
+@media (max-width: 768px) {
+  .timelineItem {
+    justify-content: flex-start !important;
+    margin-bottom: 50px;
+  }
+
+  .timelineMarker {
+    left: 15px;
+  }
+
+  .timelineCard {
+    width: calc(100% - 45px);
+    margin-left: 35px;
+    margin-right: 10px;
+  }
+
+  .cardContent {
+    padding: 30px 25px;
+  }
+
+  .cardShadow {
+    transform: translateY(3px) translateX(3px);
+  }
+
+  .jobTitle {
+    font-size: 1.3rem;
+  }
+
+  .date {
+    font-size: 0.95rem;
+  }
+
+  .company {
+    font-size: 1rem;
+    margin-bottom: 20px;
+  }
+
+  .workDetails li {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    margin-bottom: 12px;
+  }
+}

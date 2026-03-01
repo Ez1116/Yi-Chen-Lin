@@ -1,0 +1,44 @@
+.page {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  min-height: 100vh;
+  padding: 40px;
+  padding-bottom: 200px;
+  box-sizing: border-box;
+  opacity: 0;
+  transform: translateX(30px);
+  pointer-events: none;
+  visibility: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.page.active {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+  visibility: visible;
+  transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+}
+
+.page.slidingOut {
+  opacity: 0;
+  transform: translateX(-30px);
+  transition: opacity 0.3s ease-in, transform 0.3s ease-in;
+}
+
+.container {
+  max-width: 1200px;
+  width: 100%;
+  padding: 40px;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .container {
+    padding: 20px;
+  }
+}
