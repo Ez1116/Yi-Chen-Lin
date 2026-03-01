@@ -1,22 +1,15 @@
-import { useApp } from '../../context/AppContext';
 import styles from './Footer.module.css';
 
 export default function Footer() {
-  const { navigateTo } = useApp();
-
   return (
-    <div className={styles.footerSection}>
+    <footer className={styles.footerSection}>
       <div className={styles.footerContent}>
-        <div className={styles.footerLinks}>
-          <button
-            className={styles.footerLink}
-            onClick={() => navigateTo('developer')}
-          >
-            Developer
-          </button>
-        </div>
-        <div className={styles.copyright}>© Yi-Chen Lin 2025</div>
+        <span className={styles.name}>Yi-Chen Lin</span>
+        <a href="mailto:easy0110111@gmail.com" className={styles.emailLink}>
+          easy0110111@gmail.com
+        </a>
+        <span className={styles.copyright}>© 2026 Yi-Chen Lin</span>
       </div>
-    </div>
+    </footer>
   );
 }

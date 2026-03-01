@@ -5,11 +5,10 @@ import styles from './Timeline.module.css';
 export default function Timeline({ isVisible }) {
   return (
     <div className={`${styles.timelineSection} ${isVisible ? styles.visible : ''}`}>
-      <h2 className={styles.sectionTitle}>CAREER TIMELINE</h2>
+      <h2 className={styles.sectionTitle}>Career &amp; Honors</h2>
       <div className={styles.timelineContainer}>
-        <div className={styles.timelineLine}></div>
-        {timelineItems.map((item, index) => (
-          <TimelineItem key={item.id} item={item} isEven={index % 2 === 1} />
+        {timelineItems.map((item) => (
+          <TimelineItem key={item.id} item={item} />
         ))}
       </div>
     </div>

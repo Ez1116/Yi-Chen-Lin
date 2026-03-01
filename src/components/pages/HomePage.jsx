@@ -7,7 +7,6 @@ export default function HomePage({ isActive, isSlidingOut }) {
   const [hasAnimated, setHasAnimated] = useState(false);
   const [shouldAnimate, setShouldAnimate] = useState(true);
 
-  // On first activation, play animation; subsequent activations show completed
   useEffect(() => {
     if (isActive) {
       if (!hasAnimated) {
@@ -19,12 +18,6 @@ export default function HomePage({ isActive, isSlidingOut }) {
     }
   }, [isActive]);
 
-  const handleResetAnimation = () => {
-    setShouldAnimate(false);
-    // Small delay to allow reset before restarting
-    setTimeout(() => setShouldAnimate(true), 50);
-  };
-
   return (
     <div
       className={[
@@ -34,10 +27,7 @@ export default function HomePage({ isActive, isSlidingOut }) {
       ].join(' ')}
     >
       <div className={styles.container}>
-        <HeroSection
-          shouldAnimate={shouldAnimate}
-          onResetAnimation={handleResetAnimation}
-        />
+        <HeroSection shouldAnimate={shouldAnimate} />
       </div>
       <Footer />
     </div>

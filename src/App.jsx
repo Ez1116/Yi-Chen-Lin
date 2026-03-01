@@ -1,8 +1,6 @@
 import { useState, useRef } from 'react';
 import { AppContext } from './context/AppContext';
 import NavBar from './components/layout/NavBar';
-import CornerDecoration from './components/layout/CornerDecoration';
-import GetInTouchBtn from './components/layout/GetInTouchBtn';
 import HomePage from './components/pages/HomePage';
 import DeveloperPage from './components/pages/DeveloperPage';
 import PublicationsPage from './components/pages/PublicationsPage';
@@ -28,8 +26,6 @@ export default function App() {
 
   return (
     <AppContext.Provider value={{ currentPage, navigateTo }}>
-      <CornerDecoration />
-      <GetInTouchBtn />
       <NavBar />
       <HomePage
         isActive={currentPage === 'home'}

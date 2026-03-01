@@ -4,15 +4,14 @@
   left: 0;
   width: 100%;
   min-height: 100vh;
-  padding: 40px;
-  padding-bottom: 200px;
+  padding: 100px 40px 200px;
   box-sizing: border-box;
   opacity: 0;
   transform: translateX(30px);
   pointer-events: none;
   visibility: hidden;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
 }
 
@@ -31,14 +30,12 @@
 }
 
 .container {
-  max-width: 1200px;
+  max-width: 900px;
   width: 100%;
-  padding: 40px;
-  text-align: center;
 }
 
 @media (max-width: 768px) {
-  .container {
-    padding: 20px;
+  .page {
+    padding: 88px 20px 160px;
   }
 }

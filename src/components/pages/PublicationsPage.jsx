@@ -1,3 +1,4 @@
+import { publications } from '../../data/publications';
 import PublicationCard from '../publications/PublicationCard';
 import Footer from '../layout/Footer';
 import styles from './PublicationsPage.module.css';
@@ -12,8 +13,13 @@ export default function PublicationsPage({ isActive, isSlidingOut }) {
       ].join(' ')}
     >
       <div className={styles.contentContainer}>
-        <h1 className={styles.pageTitle}>PUBLICATIONS</h1>
-        <PublicationCard />
+        <h1 className={styles.pageTitle}>Publications</h1>
+        <p className={styles.pageSubtitle}>
+          Peer-reviewed research in science and environmental education
+        </p>
+        {publications.map((pub) => (
+          <PublicationCard key={pub.id} pub={pub} />
+        ))}
       </div>
       <Footer />
     </div>
