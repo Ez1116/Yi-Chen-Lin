@@ -1,70 +1,122 @@
 .heroSection {
-  text-align: center;
-  margin-bottom: 60px;
-  padding: 40px 20px;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px 0 60px;
 }
 
-.logoContainer {
-  margin-bottom: 40px;
+.heroGrid {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 40px;
+  align-items: flex-start;
   opacity: 0;
-  display: flex;
-  align-items: center;
-  gap: 30px;
-  justify-content: center;
+  margin-bottom: 60px;
 }
 
-.logoContainer.visible {
+.heroGrid.visible {
   animation: fadeIn 0.8s ease-out forwards;
+}
+
+.photoCol {
+  display: flex;
+  justify-content: center;
+  padding-top: 6px;
 }
 
 .profileImage {
-  width: 90px;
-  height: 90px;
+  width: 140px;
+  height: 140px;
   border-radius: 50%;
   object-fit: cover;
-  border: 3px solid #1f2937;
-  transition: all 0.3s ease;
-  filter: drop-shadow(0 0 10px rgba(31, 41, 55, 0.3));
+  border: 3px solid var(--color-border);
+  box-shadow: 0 4px 16px rgba(27, 79, 114, 0.12);
 }
 
-.profileImage:hover {
-  border-color: #4A90E2;
-  transform: scale(1.1);
-  filter: drop-shadow(0 0 20px rgba(74, 144, 226, 0.4));
+.textCol {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
-.textLogo {
-  font-size: 48px;
+.name {
+  font-family: var(--font-serif);
+  font-size: clamp(1.75rem, 4vw, 2.25rem);
   font-weight: 700;
-  color: #6b7280;
-  transition: all 0.3s ease;
-  filter: drop-shadow(0 0 10px rgba(107, 114, 128, 0.3));
-  cursor: pointer;
+  color: var(--color-primary);
+  margin: 0;
+  line-height: 1.2;
 }
 
-.textLogo:hover {
-  color: #4A90E2;
-  transform: scale(1.1);
-  filter: drop-shadow(0 0 20px rgba(74, 144, 226, 0.4));
+.position {
+  font-size: 1.05rem;
+  color: var(--color-text);
+  margin: 0;
+  font-weight: 500;
 }
 
-.introText {
-  font-size: 14px;
-  color: #6b7280;
-  text-transform: uppercase;
-  letter-spacing: 1.5px;
-  margin-bottom: 30px;
+.institution {
+  font-size: 0.9375rem;
+  color: var(--color-text-muted);
+  margin: 0 0 8px 0;
+}
+
+.bottomSection {
   opacity: 0;
+  margin-top: 12px;
 }
 
-.introText.visible {
+.bottomSection.visible {
   animation: fadeIn 0.8s ease-out forwards;
+}
+
+.researchLabel {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 10px 0;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.tag {
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: 20px;
+}
+
+.emailLink {
+  display: inline-block;
+  color: var(--color-primary-mid);
+  text-decoration: none;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.emailLink:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.emailLink:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 @keyframes fadeIn {
   from {
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(16px);
   }
   to {
     opacity: 1;
@@ -72,27 +124,22 @@
   }
 }
 
-@media (max-width: 768px) {
-  .heroSection {
-    padding: 40px 20px;
+@media (max-width: 640px) {
+  .heroGrid {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    text-align: center;
   }
 
-  .logoContainer {
-    flex-direction: column;
-    gap: 20px;
+  .photoCol {
+    padding-top: 0;
   }
 
-  .profileImage {
-    width: 70px;
-    height: 70px;
+  .tags {
+    justify-content: center;
   }
 
-  .textLogo {
-    font-size: 36px;
-  }
-
-  .introText {
-    font-size: 13px;
-    margin-bottom: 25px;
+  .emailLink {
+    display: block;
   }
 }

@@ -1,17 +1,6 @@
-import { useEffect } from 'react';
 import styles from './ProjectCard.module.css';
 
-export default function ProjectCard({ project, isFlipped, onFlip, onReset }) {
-  useEffect(() => {
-    const handleMouseEnter = () => {
-      if (window.innerWidth > 768) {
-        onFlip(project.id);
-      }
-    };
-
-    // No cleanup needed since we handle via props
-  }, []);
-
+export default function ProjectCard({ project, isFlipped, onFlip }) {
   const handleMouseEnter = () => {
     if (window.innerWidth > 768) {
       onFlip(project.id);
@@ -19,22 +8,35 @@ export default function ProjectCard({ project, isFlipped, onFlip, onReset }) {
   };
 
   const handleClick = (e) => {
-    // Prevent link clicks from triggering card flip
     if (e.target.tagName === 'A') return;
     onFlip(project.id);
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onFlip(project.id);
+    }
   };
 
   return (
     <div
       className={`${styles.projectCard} ${isFlipped ? styles.flipped : ''}`}
+      role="button"
+      tabIndex={0}
+      aria-label={`${project.title} — click to see more details`}
+      aria-pressed={isFlipped}
       onClick={handleClick}
+      onKeyDown={handleKeyDown}
       onMouseEnter={handleMouseEnter}
     >
       <div className={styles.cardFlip}>
-        <div className={`${styles.cardFront} ${styles[project.frontClass]}`}>
+        <div className={styles.cardFront}>
           <div className={styles.cardImageContainer}>
             <img
               src={project.image}
+              width="200"
+              height="200"
               alt={project.imageAlt}
               className={styles.projectImage}
             />

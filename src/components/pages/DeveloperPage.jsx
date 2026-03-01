@@ -8,12 +8,10 @@ import styles from './DeveloperPage.module.css';
 export default function DeveloperPage({ isActive, isSlidingOut }) {
   const { flippedId, flip, reset } = useCardFlip();
 
-  // Reset flipped card when page becomes inactive
   useEffect(() => {
     if (!isActive) reset();
   }, [isActive]);
 
-  // Click outside to reset
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (!e.target.closest('[data-project-card]')) {
@@ -33,7 +31,8 @@ export default function DeveloperPage({ isActive, isSlidingOut }) {
       ].join(' ')}
     >
       <div className={styles.projectsContainer}>
-        <h1 className={styles.pageTitle}>DEVELOPER</h1>
+        <h1 className={styles.pageTitle}>Resources</h1>
+        <p className={styles.pageSubtitle}>Open tools and knowledge resources</p>
         <div className={styles.projectsGrid}>
           {projects.map((project) => (
             <div key={project.id} data-project-card>

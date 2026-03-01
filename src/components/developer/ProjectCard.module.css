@@ -1,14 +1,13 @@
 .projectCard {
   perspective: 1000px;
-  height: 500px;
-  position: relative;
-  z-index: 1;
-  transition: z-index 0.1s ease;
+  height: 380px;
   cursor: pointer;
 }
 
-.projectCard.flipped {
-  z-index: 1000;
+.projectCard:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+  border-radius: 12px;
 }
 
 .cardFlip {
@@ -16,7 +15,7 @@
   width: 100%;
   height: 100%;
   transform-style: preserve-3d;
-  transition: transform 0.8s ease-in-out;
+  transition: transform 0.7s ease-in-out;
 }
 
 .projectCard.flipped .cardFlip {
@@ -29,9 +28,8 @@
   width: 100%;
   height: 100%;
   backface-visibility: hidden;
-  border-radius: 16px;
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
 }
 
 .cardBack {
@@ -39,25 +37,14 @@
 }
 
 .cardFront {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   display: flex;
-  flex-direction: row;
+  flex-direction: column;
   align-items: center;
-  color: white;
-  padding: 40px;
-  gap: 30px;
-}
-
-.cardFront.notion {
-  background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-}
-
-.cardFront.label {
-  background: linear-gradient(135deg, #d299c2 0%, #fef9d7 100%);
-}
-
-.cardFront.camp {
-  background: linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%);
+  justify-content: center;
+  padding: 32px;
+  gap: 16px;
 }
 
 .cardImageContainer {
@@ -65,39 +52,39 @@
 }
 
 .cardTextContainer {
-  flex: 1;
-  text-align: left;
+  text-align: center;
 }
 
 .projectImage {
-  width: 400px;
-  height: 400px;
-  object-fit: cover;
-  border-radius: 12px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
 }
 
 .projectTitle {
-  font-size: 1.8rem;
-  font-weight: 700;
-  margin-bottom: 10px;
-  color: #1f2937;
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 6px 0;
+  color: var(--color-text);
 }
 
 .projectSubtitle {
-  font-size: 1rem;
-  opacity: 0.9;
-  color: #4b5563;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  margin: 0;
 }
 
 .cardBack {
-  background: white;
-  border: 3px solid #1f2937;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  padding: 30px;
-  color: #1f2937;
+  padding: 28px;
+  color: var(--color-text);
 }
 
 .projectDescription {
@@ -108,104 +95,62 @@
 }
 
 .projectDescription h3 {
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin-bottom: 15px;
-  color: #1f2937;
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+  color: var(--color-text);
 }
 
 .projectDescription p {
-  font-size: 1rem;
+  font-size: 0.9rem;
   line-height: 1.6;
-  color: #4b5563;
-  margin-bottom: 20px;
+  color: var(--color-text-muted);
+  margin: 0 0 16px 0;
 }
 
 .projectStats {
   display: flex;
-  justify-content: space-between;
-  margin-top: 20px;
+  justify-content: space-around;
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border);
 }
 
 .statItem {
   text-align: center;
-  flex: 1;
 }
 
 .statNumber {
-  font-size: 2rem;
+  font-size: 1.25rem;
   font-weight: 700;
-  color: #1f2937;
+  color: var(--color-primary);
   display: block;
 }
 
 .statLabel {
-  font-size: 0.9rem;
-  color: #6b7280;
-  margin-top: 5px;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-top: 2px;
 }
 
 .projectLink {
   display: inline-block;
-  background: #4A90E2;
+  background: var(--color-primary);
   color: white;
   padding: 8px 16px;
-  border-radius: 8px;
+  border-radius: 6px;
   text-decoration: none;
+  font-size: 0.875rem;
   font-weight: 500;
-  transition: all 0.3s ease;
-  margin-top: 10px;
+  transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
 .projectLink:hover {
-  background: #357abd;
-  transform: translateY(-2px);
+  background: var(--color-primary-mid);
+  transform: translateY(-1px);
 }
 
-@media (max-width: 768px) {
-  .projectCard {
-    height: 400px;
-  }
-
-  .cardFront {
-    padding: 20px;
-    flex-direction: column-reverse;
-    justify-content: space-between;
-    gap: 15px;
-    text-align: center;
-  }
-
-  .cardImageContainer {
-    align-self: center;
-  }
-
-  .cardTextContainer {
-    text-align: center;
-    margin-top: 10px;
-  }
-
-  .projectImage {
-    width: 300px;
-    height: 300px;
-  }
-
-  .projectTitle {
-    font-size: 1.5rem;
-  }
-
-  .cardBack {
-    padding: 25px;
-  }
-
-  .projectDescription h3 {
-    font-size: 1.3rem;
-  }
-
-  .projectDescription p {
-    font-size: 0.9rem;
-  }
-
-  .statNumber {
-    font-size: 1.5rem;
-  }
+.projectLink:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }

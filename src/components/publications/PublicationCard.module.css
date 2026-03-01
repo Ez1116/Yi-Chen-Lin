@@ -1,70 +1,76 @@
-.contentCard {
-  position: relative;
-  margin-bottom: 40px;
+.card {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  padding: 24px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  margin-bottom: 16px;
 }
 
-.cardShadow {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: #1f2937;
-  border-radius: 12px;
-  transform: translateY(8px) translateX(8px);
+.yearBadge {
+  flex-shrink: 0;
+  background: var(--color-primary);
+  color: white;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-family: var(--font-sans);
+  line-height: 1.5;
 }
 
-.cardContent {
-  position: relative;
-  z-index: 10;
-  background: white;
-  border: 3px solid #1f2937;
-  border-radius: 12px;
-  padding: 40px;
-  transition: all 0.3s ease;
-  width: 100%;
-  box-sizing: border-box;
+.content {
+  flex: 1;
 }
 
-.contentCard:hover .cardContent {
-  transform: translateY(-2px) translateX(-2px);
+.authors {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 6px 0;
 }
 
-.publicationItem {
-  margin-bottom: 35px;
-  padding-left: 30px;
-  position: relative;
-  color: #374151;
-  line-height: 1.8;
+.title {
   font-size: 1rem;
+  color: var(--color-text);
+  line-height: 1.5;
+  margin: 0 0 8px 0;
 }
 
-.publicationItem:last-child {
-  margin-bottom: 0;
+.citation {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  margin: 0 0 10px 0;
 }
 
-.publicationItem::before {
-  content: '•';
-  position: absolute;
-  left: 0;
-  color: #4A90E2;
-  font-size: 1.5rem;
-  line-height: 1.4;
-}
-
-.publicationItem em {
+.journal {
+  color: var(--color-accent);
   font-style: italic;
-  color: #6b7280;
 }
 
-@media (max-width: 768px) {
-  .cardContent {
-    padding: 30px 25px;
-  }
+.doiLink {
+  font-size: 0.875rem;
+  color: var(--color-primary-mid);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
 
-  .publicationItem {
-    font-size: 0.95rem;
-    line-height: 1.7;
-    margin-bottom: 25px;
+.doiLink:hover {
+  color: var(--color-primary);
+  text-decoration: underline;
+}
+
+.doiLink:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .card {
+    flex-direction: column;
+    gap: 12px;
+    padding: 20px;
   }
 }
