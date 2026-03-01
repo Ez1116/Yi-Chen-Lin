@@ -1,0 +1,55 @@
+.timelineSection {
+  margin-top: 40px;
+  opacity: 0;
+}
+
+.timelineSection.visible {
+  animation: fadeIn 0.8s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sectionTitle {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #4A90E2;
+  margin-bottom: 60px;
+  letter-spacing: -0.02em;
+  text-align: center;
+}
+
+.timelineContainer {
+  position: relative;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.timelineLine {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: #4A90E2;
+  transform: translateX(-50%);
+}
+
+@media (max-width: 768px) {
+  .sectionTitle {
+    font-size: 1.6rem;
+    margin-bottom: 40px;
+  }
+
+  .timelineLine {
+    left: 15px;
+  }
+}
