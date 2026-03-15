@@ -1,6 +1,9 @@
+import { useReveal } from '../../hooks/useReveal';
 import styles from './ProjectCard.module.css';
 
 export default function ProjectCard({ project, isFlipped, onFlip }) {
+  const { ref, isVisible } = useReveal();
+
   const handleMouseEnter = () => {
     if (window.innerWidth > 768) {
       onFlip(project.id);
@@ -21,7 +24,8 @@ export default function ProjectCard({ project, isFlipped, onFlip }) {
 
   return (
     <div
-      className={`${styles.projectCard} ${isFlipped ? styles.flipped : ''}`}
+      ref={ref}
+      className={`${styles.projectCard} ${isFlipped ? styles.flipped : ''} ${styles.reveal} ${isVisible ? styles.visible : ''}`}
       role="button"
       tabIndex={0}
       aria-label={`${project.title} — click to see more details`}
