@@ -17,8 +17,8 @@ export default function PublicationsPage({ isActive, isSlidingOut }) {
         <p className={styles.pageSubtitle}>
           Peer-reviewed research in science and environmental education
         </p>
-        {publications.map((pub) => (
-          <PublicationCard key={pub.id} pub={pub} />
+        {publications.map((pub, index) => (
+          <PublicationCard key={pub.id} pub={pub} index={index} />
         ))}
       </div>
       <Footer />

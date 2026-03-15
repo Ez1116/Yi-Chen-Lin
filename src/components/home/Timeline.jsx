@@ -7,8 +7,8 @@ export default function Timeline({ isVisible }) {
     <div className={`${styles.timelineSection} ${isVisible ? styles.visible : ''}`}>
       <h2 className={styles.sectionTitle}>Career &amp; Honors</h2>
       <div className={styles.timelineContainer}>
-        {timelineItems.map((item) => (
-          <TimelineItem key={item.id} item={item} />
+        {timelineItems.map((item, index) => (
+          <TimelineItem key={item.id} item={item} index={index} />
         ))}
       </div>
     </div>

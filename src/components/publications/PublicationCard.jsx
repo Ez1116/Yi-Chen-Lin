@@ -1,8 +1,15 @@
+import { useReveal } from '../../hooks/useReveal';
 import styles from './PublicationCard.module.css';
 
-export default function PublicationCard({ pub }) {
+export default function PublicationCard({ pub, index = 0 }) {
+  const { ref, isVisible } = useReveal();
+
   return (
-    <div className={styles.card}>
+    <div
+      ref={ref}
+      className={`${styles.card} ${styles.reveal} ${isVisible ? styles.visible : ''}`}
+      style={{ transitionDelay: `${index * 80}ms` }}
+    >
       <span className={styles.yearBadge}>{pub.year}</span>
       <div className={styles.content}>
         <p className={styles.authors}>{pub.authors}</p>
