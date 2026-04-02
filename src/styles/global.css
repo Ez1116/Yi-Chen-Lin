@@ -3,14 +3,14 @@
 }
 
 :root {
-  --color-primary:       #1B4F72;
-  --color-primary-mid:   #2980B9;
-  --color-primary-light: #AED6F1;
+  --color-primary:       #0D3B66;
+  --color-primary-mid:   #1A5276;
+  --color-primary-light: #FAF0CA;
   --color-bg:            #FAFBFC;
   --color-surface:       #FFFFFF;
   --color-border:        #D5DBE8;
-  --color-text:          #1C2B3A;
-  --color-text-muted:    #5A7184;
+  --color-text:          #0D3B66;
+  --color-text-muted:    #4A6A82;
   --color-accent:        #C0392B;
   --font-serif:  'Lora', Georgia, serif;
   --font-sans:   'Inter', system-ui, sans-serif;
