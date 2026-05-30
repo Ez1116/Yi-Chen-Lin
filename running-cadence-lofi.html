@@ -85,11 +85,6 @@
   .seg button.on{border-color:var(--accent);background:#221a14;}
   .seg button.on .t{color:var(--accent);}
 
-  .toggles{display:flex;gap:8px;}
-  .tog{flex:1;padding:11px 6px;border-radius:11px;border:1px solid var(--line);background:var(--panel);
-    color:var(--muted);cursor:pointer;transition:.14s;font-size:12.5px;font-weight:600;text-align:center;}
-  .tog.on{border-color:var(--accent2);background:#231720;color:var(--accent2);}
-
   .vol{display:flex;align-items:center;gap:12px;}
   .vol .vl{font-size:10px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase;width:64px;}
 
@@ -99,9 +94,6 @@
   .play.loading{opacity:.6;}
   .play:active{transform:scale(.98);}
 
-  .note{font-size:11.5px;line-height:1.7;color:var(--muted);border-left:2px solid var(--accent2);
-    padding:2px 0 2px 12px;}
-  .note b{color:var(--txt);font-weight:600;}
   .gap{display:flex;flex-direction:column;gap:12px;}
   .bgnote{font-size:10.5px;letter-spacing:.04em;color:var(--muted);text-align:center;margin-top:-4px;}
   .bgnote b{color:var(--accent2);font-weight:600;}
@@ -147,20 +139,17 @@
       <button data-vibe="citypop"><span class="t">律動</span><span class="s">City Pop · 點頭</span></button>
       <button data-vibe="midnight"><span class="t">深夜</span><span class="s">沉 · 煙燻</span></button>
     </div>
-    <div class="toggles">
-      <div class="tog on" id="togVinyl">黑膠雜訊</div>
-      <div class="tog" id="togRain">雨聲</div>
-    </div>
   </div>
 
   <div class="card gap">
     <div class="vol"><span class="vl">音樂</span><input type="range" id="volMusic" min="0" max="100" value="72"></div>
     <div class="vol"><span class="vl">踏步提示</span><input type="range" id="volStep" min="0" max="100" value="55"></div>
+    <div class="vol"><span class="vl">黑膠雜訊</span><input type="range" id="volVinyl" min="0" max="100" value="55"></div>
+    <div class="vol"><span class="vl">雨聲</span><input type="range" id="volRain" min="0" max="100" value="0"></div>
   </div>
 
   <button class="play" id="play">開始</button>
   <div class="bgnote" id="bgnote">可在 <b>鎖屏 / 背景持續播放</b> · 改設定後幾秒生效</div>
-  <div class="note" id="note"></div>
 </div>
 
 <audio id="bgLoop" loop playsinline preload="auto"></audio>
@@ -181,7 +170,7 @@ const RENDER_SR = 32000;     // 取樣率：音樂高頻已被 7.2kHz 暖色濾�
 
 const A = {
   bpm:160, mode:'13', vibe:'rainy',
-  volMusic:0.72, volStep:0.55, vinyl:true, rain:false,
+  volMusic:0.72, volStep:0.55, volVinyl:0.55, volRain:0,
   running:false,
   bg:{ el:null, url:null, rendering:false, pending:false, silent:false, rb:null /* 目前音檔的 {bpm,mode}，給視覺用 */ },
   _lastStep:-1, _refreshTimer:null
@@ -203,23 +192,26 @@ function noise(env,dur){
    pat   : kick/snare 落點、hat 間隔與開鈸點、bass 律動 [{s, n=和弦音序號, d=長度比例}]
 */
 const VIBES = {
-  rainy: {  // 雨後 — 夢幻下行 (Fmaj7 Em7 Dm7 Cmaj7)
+  rainy: {  // 雨後 — 夢幻下行、電鋼琴 (Fmaj7 Em7 Dm7 Cmaj7)
     chords:[[65,69,72,76],[64,67,71,74],[62,65,69,72],[60,64,67,71]],
     warm:7200, swing:0.18, leadP:0.45,
+    chordInst:'rhodes', bassInst:'bass', leadInst:'lead',
     stabs:[{s:0,d:0.95}],
     pat:{ kick:[0,8], snare:[4,12], hatStep:2, hatOpen:[6,14],
           bass:[{s:0,n:0,d:0.5},{s:8,n:1,d:0.45}] }
   },
-  citypop: {  // 律動 City Pop — 明亮有 groove (Gmaj9 Em7 Am7 D7)
+  citypop: {  // 律動 City Pop — 撥弦電吉他 + 電貝斯 (Gmaj9 Em7 Am7 D7)
     chords:[[67,71,74,78],[64,67,71,74],[69,72,76,79],[62,66,69,72]],
     warm:9000, swing:0.08, leadP:0.30,
+    chordInst:'guitar', bassInst:'ebass', leadInst:'guitar',
     stabs:[{s:0,d:0.45},{s:8,d:0.45}],
     pat:{ kick:[0,8,14], snare:[4,12], hatStep:2, hatOpen:[2,10],
           bass:[{s:0,n:0,d:0.25},{s:3,n:0,d:0.2},{s:8,n:2,d:0.25},{s:11,n:0,d:0.2}] }
   },
-  midnight: {  // 深夜 — 煙燻爵士、暗、留白 (Cm7 Fm7 Dm7b5 G7)
+  midnight: {  // 深夜 — 煙燻爵士、暗、薩克斯風主奏 (Cm7 Fm7 Dm7b5 G7)
     chords:[[60,63,67,70],[53,56,60,63],[62,65,68,72],[55,59,62,65]],
-    warm:5200, swing:0.34, leadP:0.22,
+    warm:5200, swing:0.34, leadP:0.42,
+    chordInst:'rhodes', bassInst:'bass', leadInst:'sax',
     stabs:[{s:0,d:0.97}],
     pat:{ kick:[0,8], snare:[12], hatStep:2, hatOpen:[14],
           bass:[{s:0,n:0,d:0.9}] }
@@ -262,6 +254,61 @@ function lead(env,m,t){
   g.gain.exponentialRampToValueAtTime(0.0001,t+0.6);
   o.connect(g).connect(env.musicBus); o.start(t); o.stop(t+0.7);
 }
+/* 撥弦電吉他：鋸齒波 + 起音快、濾波由亮轉暗、輕微 detune 製造 chorus、和弦逐音掃弦 */
+function guitar(env,notes,t,dur){
+  notes.forEach((m,i)=>{
+    const f=midiHz(m), tt=t+i*0.018;               // 逐音掃弦
+    const g=env.ctx.createGain();
+    const lp=env.ctx.createBiquadFilter(); lp.type='lowpass'; lp.Q.value=1.0;
+    lp.frequency.setValueAtTime(2800,tt); lp.frequency.exponentialRampToValueAtTime(900,tt+0.5);
+    const amp=0.10/Math.sqrt(notes.length)+0.02;
+    g.gain.setValueAtTime(0.0001,tt);
+    g.gain.exponentialRampToValueAtTime(amp,tt+0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001,tt+dur);
+    [-6,6].forEach(det=>{
+      const o=env.ctx.createOscillator(); o.type='sawtooth';
+      o.frequency.value=f; o.detune.value=det;
+      o.connect(g); o.start(tt); o.stop(tt+dur+0.05);
+    });
+    g.connect(lp).connect(env.musicBus);
+  });
+}
+/* 電貝斯：三角+鋸齒疊加、起音帶撥彈、濾波 pluck，比基本 bass 更紮實有顆粒 */
+function ebass(env,m,t,dur){
+  const o=env.ctx.createOscillator(), o2=env.ctx.createOscillator();
+  const og=env.ctx.createGain(), o2g=env.ctx.createGain();
+  const lp=env.ctx.createBiquadFilter(), g=env.ctx.createGain();
+  lp.type='lowpass'; lp.Q.value=2;
+  lp.frequency.setValueAtTime(1500,t); lp.frequency.exponentialRampToValueAtTime(480,t+0.18);
+  o.type='triangle'; o2.type='sawtooth';
+  o.frequency.value=midiHz(m-12); o2.frequency.value=midiHz(m-12); o2.detune.value=5;
+  og.gain.value=0.55; o2g.gain.value=0.22;
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(0.5,t+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(og).connect(lp); o2.connect(o2g).connect(lp); lp.connect(g).connect(env.musicBus);
+  o.start(t); o2.start(t); o.stop(t+dur+0.05); o2.stop(t+dur+0.05);
+}
+/* 薩克斯風：鋸齒波經共振帶通(鼻音 formant) + 顫音 + 軟起音 + 一點氣音 breath */
+function sax(env,m,t,dur){
+  const f=midiHz(m);
+  const o=env.ctx.createOscillator(); o.type='sawtooth'; o.frequency.value=f;
+  const vib=env.ctx.createOscillator(), vibG=env.ctx.createGain();
+  vib.frequency.value=5.2; vibG.gain.value=7; vib.connect(vibG).connect(o.detune);
+  const bp=env.ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1300; bp.Q.value=1.3;
+  const lp=env.ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=3200;
+  const g=env.ctx.createGain();
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(0.15,t+0.08);          // 吹氣軟起音
+  g.gain.setValueAtTime(0.15,t+Math.max(0.1,dur*0.6));
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  const n=env.ctx.createBufferSource(); n.buffer=noise(env,dur+0.1);
+  const nbp=env.ctx.createBiquadFilter(); nbp.type='bandpass'; nbp.frequency.value=2000; nbp.Q.value=0.8;
+  const ng=env.ctx.createGain(); ng.gain.value=0.018;
+  n.connect(nbp).connect(ng).connect(g);
+  o.connect(bp).connect(lp).connect(g).connect(env.musicBus);
+  o.start(t); o.stop(t+dur+0.1); vib.start(t); vib.stop(t+dur+0.1); n.start(t); n.stop(t+dur+0.1);
+}
 function kick(env,t){
   const o=env.ctx.createOscillator(), g=env.ctx.createGain();
   o.frequency.setValueAtTime(130,t); o.frequency.exponentialRampToValueAtTime(45,t+0.12);
@@ -284,10 +331,10 @@ function hat(env,t,open){
   g.gain.setValueAtTime(open?0.1:0.08,t); g.gain.exponentialRampToValueAtTime(0.0001,t+(open?0.12:0.045));
   n.connect(hp).connect(g).connect(env.musicBus); n.start(t); n.stop(t+0.13);
 }
-function crackle(env,t){
+function crackle(env,t,vol){
   const n=env.ctx.createBufferSource(); n.buffer=noise(env,0.02);
   const hp=env.ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=3000;
-  const g=env.ctx.createGain(); g.gain.value=0.05+Math.random()*0.06;
+  const g=env.ctx.createGain(); g.gain.value=(0.09+Math.random()*0.11)*vol;
   n.connect(hp).connect(g).connect(env.texBus); n.start(t); n.stop(t+0.02);
 }
 function stepTick(env,t,acc){
@@ -299,8 +346,17 @@ function stepTick(env,t,acc){
   o.connect(g).connect(env.stepBus); o.start(t); o.stop(t+0.05);
 }
 
+/* 依氛圍選用樂器 */
+function playChord(env,V,chord,t,dur){ (V.chordInst==='guitar'?guitar:rhodes)(env,chord,t,dur); }
+function playBass(env,V,m,t,dur){ (V.bassInst==='ebass'?ebass:bass)(env,m,t,dur); }
+function playLead(env,V,note,t){
+  if(V.leadInst==='sax') sax(env,note,t,1.3);
+  else if(V.leadInst==='guitar') guitar(env,[note],t,0.9);
+  else lead(env,note,t);
+}
+
 /* ---------- 排程 (16分音符網格, 音樂速度) ---------- */
-/* cfg = {musicBpm, mode, vibe, vinyl} */
+/* cfg = {musicBpm, mode, vibe, volVinyl} */
 function scheduleStep(env, s, t, measure, cfg){
   const sixteenth = 60/cfg.musicBpm/4;
   const measDur = sixteenth*16;
@@ -314,13 +370,13 @@ function scheduleStep(env, s, t, measure, cfg){
     const swing = (Math.floor(s/V.pat.hatStep) % 2 === 1) ? sixteenth*V.swing : 0;
     hat(env, t+swing, V.pat.hatOpen.includes(s));
   }
-  // 和弦撥奏 / bass / 旋律
-  for(const st of V.stabs){ if(st.s===s) rhodes(env, chord, t, measDur*st.d); }
-  for(const b of V.pat.bass){ if(b.s===s) bass(env, chord[b.n % chord.length], t, measDur*b.d); }
-  if(s===10 && Math.random()<V.leadP){ lead(env, chord[1+Math.floor(Math.random()*(chord.length-1))], t); }
+  // 和弦撥奏 / bass / 旋律（依氛圍用不同樂器）
+  for(const st of V.stabs){ if(st.s===s) playChord(env, V, chord, t, measDur*st.d); }
+  for(const b of V.pat.bass){ if(b.s===s) playBass(env, V, chord[b.n % chord.length], t, measDur*b.d); }
+  if(s===10 && Math.random()<V.leadP){ playLead(env, V, chord[1+Math.floor(Math.random()*(chord.length-1))], t); }
 
   // 黑膠雜訊 crackle
-  if(cfg.vinyl && Math.random()<0.5) crackle(env,t+Math.random()*sixteenth);
+  if(cfg.volVinyl>0 && Math.random()<0.5) crackle(env,t+Math.random()*sixteenth, cfg.volVinyl);
 
   // 踏步提示 (八分音符 = 每步)
   if(s%2===0){
@@ -331,17 +387,17 @@ function scheduleStep(env, s, t, measure, cfg){
 
 /* ---------- 離線渲染：把目前設定算成一段無縫循環音檔 ---------- */
 function buildOfflineTexture(env,cfg,dur){
-  if(cfg.vinyl){
+  if(cfg.volVinyl>0){
     const hiss=env.ctx.createBufferSource(); hiss.buffer=noise(env,2); hiss.loop=true;
     const hp=env.ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=4000;
-    const g=env.ctx.createGain(); g.gain.value=0.012;
+    const g=env.ctx.createGain(); g.gain.value=0.022*cfg.volVinyl;
     hiss.connect(hp).connect(g).connect(env.texBus); hiss.start(0); hiss.stop(dur);
   }
-  if(cfg.rain){
+  if(cfg.volRain>0){
     const src=env.ctx.createBufferSource(); src.buffer=noise(env,2); src.loop=true;
     const bp=env.ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=3200; bp.Q.value=0.4;
     const lp=env.ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=6500;
-    const g=env.ctx.createGain(); g.gain.value=0.09;
+    const g=env.ctx.createGain(); g.gain.value=0.16*cfg.volRain;
     src.connect(bp).connect(lp).connect(g).connect(env.texBus); src.start(0); src.stop(dur);
   }
 }
@@ -376,7 +432,7 @@ async function renderLoop(cfg){
   const env={ctx:octx, musicBus, stepBus, texBus, wobble:wd};
 
   buildOfflineTexture(env, cfg, total);
-  const stepCfg = {musicBpm:cfg.musicBpm, mode:cfg.mode, vibe:cfg.vibe, vinyl:cfg.vinyl};
+  const stepCfg = {musicBpm:cfg.musicBpm, mode:cfg.mode, vibe:cfg.vibe, volVinyl:cfg.volVinyl};
   for(let m=0;m<LOOP_MEASURES;m++){
     for(let s=0;s<16;s++){
       scheduleStep(env, s, (m*16+s)*sixteenth, m, stepCfg);
@@ -398,7 +454,7 @@ async function renderLoop(cfg){
 }
 
 function renderCfg(){
-  return {musicBpm:A.bpm/2, mode:A.mode, vibe:A.vibe, vinyl:A.vinyl, rain:A.rain,
+  return {musicBpm:A.bpm/2, mode:A.mode, vibe:A.vibe, volVinyl:A.volVinyl, volRain:A.volRain,
           volMusic:A.volMusic, volStep:A.volStep};
 }
 /* 渲染目前設定 → 換上正在播放的 <audio>（前景才會換；背景無法改設定） */
@@ -525,15 +581,10 @@ function stop(){
   const b=document.getElementById('play'); b.textContent='開始'; b.classList.remove('running');
 }
 
-const NOTES={
-  '13':'<b>重拍 1·3：</b>音樂的大鼓落在每小節第 1、3 拍,踏步提示也在那兩步加強。一拍兩步時這兩個重音會固定落在同一隻腳,適合練主導腳推蹬,但左右不平均。',
-  'even':'<b>平均拍:</b>每一步的提示都等強,左右腳得到完全相同的節奏線索,是最單純不偏一邊的選擇。音樂的鼓組照常走 lofi 律動。'
-};
 function setMode(m){
   A.mode=m;
   document.querySelectorAll('#modes button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));
   document.getElementById('modeTag').textContent = m==='13'?'重拍 1 & 3':'平均拍';
-  document.getElementById('note').innerHTML=NOTES[m];
   updateMedia(); scheduleRefresh();
 }
 function setVibe(v){
@@ -547,14 +598,10 @@ document.getElementById('plus').addEventListener('click',()=>setBpm(A.bpm+1));
 document.getElementById('minus').addEventListener('click',()=>setBpm(A.bpm-1));
 document.getElementById('volMusic').addEventListener('input',e=>{ A.volMusic=+e.target.value/100; scheduleRefresh(); });
 document.getElementById('volStep').addEventListener('input',e=>{ A.volStep=+e.target.value/100; scheduleRefresh(); });
+document.getElementById('volVinyl').addEventListener('input',e=>{ A.volVinyl=+e.target.value/100; scheduleRefresh(); });
+document.getElementById('volRain').addEventListener('input',e=>{ A.volRain=+e.target.value/100; scheduleRefresh(); });
 document.getElementById('modes').addEventListener('click',e=>{const b=e.target.closest('button'); if(b)setMode(b.dataset.mode);});
 document.getElementById('vibes').addEventListener('click',e=>{const b=e.target.closest('button'); if(b)setVibe(b.dataset.vibe);});
-document.getElementById('togVinyl').addEventListener('click',e=>{
-  A.vinyl=!A.vinyl; e.target.classList.toggle('on',A.vinyl); scheduleRefresh();
-});
-document.getElementById('togRain').addEventListener('click',e=>{
-  A.rain=!A.rain; e.target.classList.toggle('on',A.rain); scheduleRefresh();
-});
 document.getElementById('play').addEventListener('click',()=>A.running?stop():start());
 
 A.bg.el=document.getElementById('bgLoop');
