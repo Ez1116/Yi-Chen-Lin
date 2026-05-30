@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>跑步節拍器 · lofi</title>
+<style>
+  :root{
+    --bg:#0e0b14;
+    --panel:#181321;
+    --panel2:#13101b;
+    --line:#2a2336;
+    --accent:#e9b872;     /* warm amber */
+    --accent2:#c98a8a;    /* dusty rose */
+    --left:#e98b6a;
+    --right:#7fb0d6;
+    --txt:#efe7da;
+    --muted:#8a8095;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    background:
+      radial-gradient(130% 90% at 50% -10%, #241a2e 0%, var(--bg) 58%),
+      var(--bg);
+    color:var(--txt);
+    font-family:"Helvetica Neue",system-ui,-apple-system,sans-serif;
+    min-height:100%;display:flex;flex-direction:column;align-items:center;
+    padding:22px 18px 40px;overflow-x:hidden;
+  }
+  .grain{position:fixed;inset:0;pointer-events:none;opacity:.05;mix-blend-mode:overlay;
+    background-image:repeating-linear-gradient(0deg,#fff 0 1px,transparent 1px 3px);}
+  .wrap{width:100%;max-width:440px;display:flex;flex-direction:column;gap:16px;}
+
+  header{display:flex;justify-content:space-between;align-items:baseline;
+    border-bottom:1px solid var(--line);padding-bottom:10px;}
+  .brand{font-weight:800;letter-spacing:.34em;font-size:13px;color:var(--accent);}
+  .brand i{font-style:normal;color:var(--accent2);font-weight:400;letter-spacing:.1em;}
+  .tag{font-size:10px;letter-spacing:.22em;color:var(--muted);text-transform:uppercase;}
+
+  /* footfall stage */
+  .stage{display:flex;gap:12px;}
+  .foot{flex:1;aspect-ratio:1/.92;border:1px solid var(--line);border-radius:18px;background:var(--panel);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;position:relative;
+    transition:transform .06s,box-shadow .1s,background .1s;overflow:hidden;}
+  .foot .big{font-size:40px;font-weight:800;letter-spacing:-.02em;opacity:.26;transition:.08s;}
+  .foot .sub{font-size:10px;letter-spacing:.3em;color:var(--muted);text-transform:uppercase;}
+  .foot.L.on{background:#241620;box-shadow:0 0 28px rgba(233,139,106,.3);border-color:var(--left);}
+  .foot.R.on{background:#161f26;box-shadow:0 0 28px rgba(127,176,214,.3);border-color:var(--right);}
+  .foot.L .big{color:var(--left);}
+  .foot.R .big{color:var(--right);}
+  .foot.on .big{opacity:1;}
+  .foot.on.acc::after{content:"重拍";position:absolute;bottom:10px;font-size:9px;letter-spacing:.2em;
+    color:var(--accent);}
+
+  .beatrow{display:flex;gap:6px;justify-content:center;}
+  .beatrow .b{width:9px;height:9px;border-radius:50%;background:#2a2336;transition:.1s;}
+  .beatrow .b.on{background:var(--accent);transform:scale(1.35);}
+
+  .card{background:var(--panel2);border:1px solid var(--line);border-radius:16px;padding:18px 18px;}
+  .clabel{font-size:11px;letter-spacing:.3em;color:var(--muted);text-transform:uppercase;}
+
+  .bpm-row{display:flex;align-items:flex-end;gap:10px;margin-top:2px;}
+  .bpm-val{font-family:"SF Mono",ui-monospace,Menlo,monospace;font-size:62px;font-weight:700;line-height:.82;
+    letter-spacing:-.03em;color:var(--txt);font-variant-numeric:tabular-nums;}
+  .bpm-unit{font-size:12px;letter-spacing:.18em;color:var(--accent);padding-bottom:8px;}
+  .bpm-sub{font-size:11px;color:var(--muted);margin-top:6px;}
+  .stepper{display:flex;gap:8px;margin-top:14px;}
+  .stepper button{width:40px;height:40px;border-radius:11px;border:1px solid var(--line);background:#1d1726;
+    color:var(--txt);font-size:19px;font-weight:600;cursor:pointer;transition:.12s;}
+  .stepper button:active{background:var(--accent);color:#1a1320;transform:scale(.94);}
+  input[type=range]{-webkit-appearance:none;flex:1;height:40px;background:transparent;cursor:pointer;}
+  input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:4px;
+    background:linear-gradient(90deg,var(--accent) var(--pct,40%),#2c2538 var(--pct,40%));}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;
+    background:var(--accent);margin-top:-8px;box-shadow:0 0 0 4px rgba(233,184,114,.16);}
+  input[type=range]::-moz-range-track{height:4px;border-radius:4px;background:#2c2538;}
+  input[type=range]::-moz-range-thumb{width:20px;height:20px;border:none;border-radius:50%;background:var(--accent);}
+
+  .seg{display:flex;gap:8px;}
+  .seg button{flex:1;padding:11px 4px;border-radius:11px;border:1px solid var(--line);background:var(--panel);
+    color:var(--muted);cursor:pointer;transition:.14s;text-align:center;}
+  .seg button .t{font-size:13px;font-weight:700;color:var(--txt);display:block;}
+  .seg button .s{font-size:9.5px;letter-spacing:.04em;margin-top:3px;display:block;}
+  .seg button.on{border-color:var(--accent);background:#221a14;}
+  .seg button.on .t{color:var(--accent);}
+
+  .toggles{display:flex;gap:8px;}
+  .tog{flex:1;padding:11px 6px;border-radius:11px;border:1px solid var(--line);background:var(--panel);
+    color:var(--muted);cursor:pointer;transition:.14s;font-size:12.5px;font-weight:600;text-align:center;}
+  .tog.on{border-color:var(--accent2);background:#231720;color:var(--accent2);}
+
+  .vol{display:flex;align-items:center;gap:12px;}
+  .vol .vl{font-size:10px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase;width:64px;}
+
+  .play{width:100%;padding:20px;border:none;border-radius:16px;background:var(--accent);color:#1a1320;
+    font-size:17px;font-weight:800;letter-spacing:.2em;cursor:pointer;transition:.14s;text-transform:uppercase;}
+  .play.running{background:#1a1320;color:var(--accent);border:1px solid var(--accent);}
+  .play:active{transform:scale(.98);}
+
+  .note{font-size:11.5px;line-height:1.7;color:var(--muted);border-left:2px solid var(--accent2);
+    padding:2px 0 2px 12px;}
+  .note b{color:var(--txt);font-weight:600;}
+  .gap{display:flex;flex-direction:column;gap:12px;}
+</style>
+</head>
+<body>
+<div class="grain"></div>
+<div class="wrap">
+  <header>
+    <div class="brand">CADENCE <i>lofi</i></div>
+    <div class="tag" id="modeTag">重拍 1 &amp; 3</div>
+  </header>
+
+  <div class="stage">
+    <div class="foot L" id="footL"><div class="big">L</div><div class="sub">左</div></div>
+    <div class="foot R" id="footR"><div class="big">R</div><div class="sub">右</div></div>
+  </div>
+  <div class="beatrow" id="beatrow"><div class="b"></div><div class="b"></div><div class="b"></div><div class="b"></div></div>
+
+  <div class="card">
+    <div class="clabel">步頻 · STEPS / MIN</div>
+    <div class="bpm-row"><div class="bpm-val" id="bpmVal">160</div><div class="bpm-unit">SPM</div></div>
+    <div class="bpm-sub" id="bpmSub">音樂速度 80 BPM · 每拍兩步</div>
+    <div class="stepper">
+      <button id="minus">−</button>
+      <input type="range" id="bpm" min="140" max="190" value="160" step="1">
+      <button id="plus">＋</button>
+    </div>
+  </div>
+
+  <div class="gap">
+    <div class="clabel">節奏模式</div>
+    <div class="seg" id="modes">
+      <button data-mode="13" class="on"><span class="t">重拍 1·3</span><span class="s">固定主導腳</span></button>
+      <button data-mode="even"><span class="t">平均拍</span><span class="s">左右均等</span></button>
+    </div>
+  </div>
+
+  <div class="gap">
+    <div class="clabel">氛圍</div>
+    <div class="seg" id="vibes">
+      <button data-vibe="dusk" class="on"><span class="t">黃昏</span><span class="s">暖 · 大調</span></button>
+      <button data-vibe="rainy"><span class="t">雨後</span><span class="s">夢 · 下行</span></button>
+      <button data-vibe="midnight"><span class="t">深夜</span><span class="s">沉 · 小調</span></button>
+    </div>
+    <div class="toggles">
+      <div class="tog on" id="togVinyl">黑膠雜訊</div>
+      <div class="tog" id="togRain">雨聲</div>
+    </div>
+  </div>
+
+  <div class="card gap">
+    <div class="vol"><span class="vl">音樂</span><input type="range" id="volMusic" min="0" max="100" value="72"></div>
+    <div class="vol"><span class="vl">踏步提示</span><input type="range" id="volStep" min="0" max="100" value="55"></div>
+  </div>
+
+  <button class="play" id="play">開始</button>
+  <div class="note" id="note"></div>
+</div>
+
+<script>
+const ctxClass = window.AudioContext||window.webkitAudioContext;
+const A = {
+  ctx:null, master:null, musicBus:null, warm:null, stepBus:null, texBus:null,
+  bpm:160, mode:'13', vibe:'dusk', running:false,
+  next:0, s16:0, measure:0, step:0, timer:null, vis:[],
+  volMusic:0.72, volStep:0.55, vinyl:true, rain:false,
+  wobbleLFO:null, rainNode:null, hissNode:null
+};
+
+function midiHz(m){ return 440*Math.pow(2,(m-69)/12); }
+function noise(dur){
+  const b=A.ctx.createBuffer(1,Math.max(1,A.ctx.sampleRate*dur),A.ctx.sampleRate);
+  const d=b.getChannelData(0);
+  for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
+  return b;
+}
+
+/* ---------- 和弦進行 ---------- */
+const VIBES = {
+  dusk:    { chords:[[60,64,67,71],[57,60,64,67],[62,65,69,72],[55,59,62,65]] }, // Cmaj7 Am7 Dm7 G7
+  rainy:   { chords:[[65,69,72,76],[64,67,71,74],[62,65,69,72],[60,64,67,71]] }, // Fmaj7 Em7 Dm7 Cmaj7
+  midnight:{ chords:[[57,60,64,67],[53,57,60,64],[60,64,67,71],[55,59,62,66]] }  // Am7 Fmaj7 Cmaj7 Em7
+};
+
+/* ---------- 音色 ---------- */
+function rhodes(notes,t,dur){
+  notes.forEach((m,i)=>{
+    const f=midiHz(m);
+    const g=A.ctx.createGain();
+    const lp=A.ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1500; lp.Q.value=0.6;
+    g.gain.setValueAtTime(0.0001,t);
+    g.gain.exponentialRampToValueAtTime(0.16/notes.length+0.04,t+0.05);
+    g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+    [0,7].forEach(det=>{
+      const o=A.ctx.createOscillator();
+      o.type = det? 'sine':'triangle';
+      o.frequency.value=f; o.detune.value=det;
+      if(A.wobbleLFO) A.wobbleLFO.connect(o.detune);
+      o.connect(g); o.start(t); o.stop(t+dur+0.1);
+    });
+    g.connect(lp).connect(A.musicBus);
+  });
+}
+function bass(m,t,dur){
+  const o=A.ctx.createOscillator(), g=A.ctx.createGain();
+  o.type='triangle'; o.frequency.value=midiHz(m-12);
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(0.4,t+0.03);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
+  o.connect(g).connect(A.musicBus); o.start(t); o.stop(t+dur+0.05);
+}
+function lead(m,t){
+  const o=A.ctx.createOscillator(), g=A.ctx.createGain();
+  o.type='sine'; o.frequency.value=midiHz(m+12);
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(0.12,t+0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+0.6);
+  o.connect(g).connect(A.musicBus); o.start(t); o.stop(t+0.7);
+}
+function kick(t){
+  const o=A.ctx.createOscillator(), g=A.ctx.createGain();
+  o.frequency.setValueAtTime(130,t); o.frequency.exponentialRampToValueAtTime(45,t+0.12);
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(0.9,t+0.005);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+0.22);
+  o.connect(g).connect(A.musicBus); o.start(t); o.stop(t+0.25);
+}
+function snare(t){
+  const n=A.ctx.createBufferSource(); n.buffer=noise(0.2);
+  const bp=A.ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1900; bp.Q.value=0.7;
+  const g=A.ctx.createGain();
+  g.gain.setValueAtTime(0.28,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);
+  n.connect(bp).connect(g).connect(A.musicBus); n.start(t); n.stop(t+0.2);
+}
+function hat(t,open){
+  const n=A.ctx.createBufferSource(); n.buffer=noise(open?0.12:0.04);
+  const hp=A.ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=7500;
+  const g=A.ctx.createGain();
+  g.gain.setValueAtTime(open?0.1:0.08,t); g.gain.exponentialRampToValueAtTime(0.0001,t+(open?0.12:0.045));
+  n.connect(hp).connect(g).connect(A.musicBus); n.start(t); n.stop(t+0.13);
+}
+function crackle(t){
+  const n=A.ctx.createBufferSource(); n.buffer=noise(0.02);
+  const hp=A.ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=3000;
+  const g=A.ctx.createGain(); g.gain.value=0.05+Math.random()*0.06;
+  n.connect(hp).connect(g).connect(A.texBus); n.start(t); n.stop(t+0.02);
+}
+function stepTick(t,acc){
+  const o=A.ctx.createOscillator(), g=A.ctx.createGain();
+  o.type='triangle'; o.frequency.value=acc?1500:1050;
+  g.gain.setValueAtTime(0.0001,t);
+  g.gain.exponentialRampToValueAtTime(acc?0.9:0.5,t+0.002);
+  g.gain.exponentialRampToValueAtTime(0.0001,t+0.04);
+  o.connect(g).connect(A.stepBus); o.start(t); o.stop(t+0.05);
+}
+
+/* ---------- 排程 (16分音符網格, 音樂速度) ---------- */
+function musicBpm(){ return A.bpm/2; }
+function isAccentStep(s){ return A.mode==='even' ? true : (s===0||s===8); }
+
+function scheduleStep(s,t){
+  const sixteenth = 60/musicBpm()/4;
+  const measDur = sixteenth*16;
+  const chords = VIBES[A.vibe].chords;
+  const chord = chords[A.measure % chords.length];
+
+  // 鼓
+  if(s===0||s===8) kick(t);
+  if(s===4||s===12) snare(t);
+  if(s%2===0){ // 八分音符 hi-hat, 偶數帶點 swing
+    const swing = (s%4===2)? sixteenth*0.18 : 0;
+    hat(t+swing, s===6||s===14);
+  }
+  // 和弦 / bass / 旋律
+  if(s===0){ rhodes(chord,t,measDur*0.95); bass(chord[0],t,measDur*0.5); }
+  if(s===8){ bass(chord[1],t,measDur*0.45); }
+  if(s===10 && Math.random()<0.45){ lead(chord[1+Math.floor(Math.random()*3)],t); }
+
+  // 黑膠雜訊
+  if(A.vinyl && Math.random()<0.5) crackle(t+Math.random()*sixteenth);
+
+  // 踏步提示 (八分音符 = 每步)
+  if(s%2===0){
+    const acc = isAccentStep(s);
+    stepTick(t,acc);
+    A.vis.push({step:A.step,acc:acc,beat:Math.floor(s/4),t:t});
+    A.step++;
+  }
+}
+function scheduler(){
+  const sixteenth = 60/musicBpm()/4;
+  while(A.next < A.ctx.currentTime + 0.14){
+    scheduleStep(A.s16, A.next);
+    A.s16 = (A.s16+1)%16;
+    if(A.s16===0) A.measure++;
+    A.next += sixteenth;
+  }
+}
+function draw(){
+  if(!A.running) return;
+  const now=A.ctx.currentTime;
+  while(A.vis.length && A.vis[0].t<=now){ paint(A.vis.shift()); }
+  requestAnimationFrame(draw);
+}
+function paint(ev){
+  const foot = ev.step%2; // 0 = L, 1 = R
+  const L=document.getElementById('footL'), R=document.getElementById('footR');
+  L.classList.remove('on','acc'); R.classList.remove('on','acc');
+  const el = foot===0? L : R;
+  el.classList.add('on'); if(ev.acc) el.classList.add('acc');
+  const bs=document.querySelectorAll('#beatrow .b');
+  bs.forEach((b,i)=>b.classList.toggle('on', i===ev.beat));
+}
+
+/* ---------- 控制 ---------- */
+function setBpm(v){
+  A.bpm=Math.max(140,Math.min(190,v));
+  document.getElementById('bpm').value=A.bpm;
+  document.getElementById('bpmVal').textContent=A.bpm;
+  document.getElementById('bpmSub').textContent=`音樂速度 ${Math.round(A.bpm/2)} BPM · 每拍兩步`;
+  document.getElementById('bpm').style.setProperty('--pct',((A.bpm-140)/50*100)+'%');
+}
+function buildTexture(){
+  // 連續黑膠 hiss
+  const hiss=A.ctx.createBufferSource(); hiss.buffer=noise(2); hiss.loop=true;
+  const hp=A.ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=4000;
+  const g=A.ctx.createGain(); g.gain.value=A.vinyl?0.012:0;
+  hiss.connect(hp).connect(g).connect(A.texBus); hiss.start();
+  A.hissNode={src:hiss,gain:g};
+}
+function startRain(){
+  if(A.rainNode) return;
+  const src=A.ctx.createBufferSource(); src.buffer=noise(2); src.loop=true;
+  const bp=A.ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=3200; bp.Q.value=0.4;
+  const lp=A.ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=6500;
+  const g=A.ctx.createGain(); g.gain.value=0.0001;
+  src.connect(bp).connect(lp).connect(g).connect(A.texBus); src.start();
+  g.gain.exponentialRampToValueAtTime(0.09,A.ctx.currentTime+0.8);
+  A.rainNode={src:src,gain:g};
+}
+function stopRain(){
+  if(!A.rainNode) return;
+  const r=A.rainNode; A.rainNode=null;
+  r.gain.gain.exponentialRampToValueAtTime(0.0001,A.ctx.currentTime+0.5);
+  r.src.stop(A.ctx.currentTime+0.6);
+}
+function start(){
+  if(!A.ctx){
+    A.ctx=new ctxClass();
+    A.master=A.ctx.createGain(); A.master.gain.value=0.9; A.master.connect(A.ctx.destination);
+    A.warm=A.ctx.createBiquadFilter(); A.warm.type='lowpass'; A.warm.frequency.value=7200; A.warm.Q.value=0.3;
+    A.warm.connect(A.master);
+    A.musicBus=A.ctx.createGain(); A.musicBus.gain.value=A.volMusic; A.musicBus.connect(A.warm);
+    A.stepBus=A.ctx.createGain(); A.stepBus.gain.value=A.volStep; A.stepBus.connect(A.master);
+    A.texBus=A.ctx.createGain(); A.texBus.gain.value=0.9; A.texBus.connect(A.master);
+    A.wobbleLFO=A.ctx.createOscillator(); const wd=A.ctx.createGain();
+    A.wobbleLFO.frequency.value=0.55; wd.gain.value=7; A.wobbleLFO.connect(wd);
+    A.wobbleLFO=wd; // expose the depth-scaled signal
+    const lfo=A.ctx.createOscillator(); lfo.frequency.value=0.55; lfo.connect(wd); lfo.start();
+    buildTexture();
+  }
+  A.ctx.resume();
+  A.s16=0; A.measure=0; A.step=0; A.vis=[]; A.next=A.ctx.currentTime+0.1;
+  A.running=true;
+  if(A.rain) startRain();
+  A.timer=setInterval(scheduler,25);
+  requestAnimationFrame(draw);
+  const p=document.getElementById('play'); p.textContent='停止'; p.classList.add('running');
+}
+function stop(){
+  A.running=false; clearInterval(A.timer); stopRain();
+  document.getElementById('footL').classList.remove('on','acc');
+  document.getElementById('footR').classList.remove('on','acc');
+  document.querySelectorAll('#beatrow .b').forEach(b=>b.classList.remove('on'));
+  const p=document.getElementById('play'); p.textContent='開始'; p.classList.remove('running');
+}
+
+const NOTES={
+  '13':'<b>重拍 1·3：</b>音樂的大鼓落在每小節第 1、3 拍,踏步提示也在那兩步加強。一拍兩步時這兩個重音會固定落在同一隻腳,適合練主導腳推蹬,但左右不平均。',
+  'even':'<b>平均拍:</b>每一步的提示都等強,左右腳得到完全相同的節奏線索,是最單純不偏一邊的選擇。音樂的鼓組照常走 lofi 律動。'
+};
+function setMode(m){
+  A.mode=m;
+  document.querySelectorAll('#modes button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));
+  document.getElementById('modeTag').textContent = m==='13'?'重拍 1 & 3':'平均拍';
+  document.getElementById('note').innerHTML=NOTES[m];
+}
+function setVibe(v){
+  A.vibe=v;
+  document.querySelectorAll('#vibes button').forEach(b=>b.classList.toggle('on',b.dataset.vibe===v));
+}
+
+document.getElementById('bpm').addEventListener('input',e=>setBpm(+e.target.value));
+document.getElementById('plus').addEventListener('click',()=>setBpm(A.bpm+1));
+document.getElementById('minus').addEventListener('click',()=>setBpm(A.bpm-1));
+document.getElementById('volMusic').addEventListener('input',e=>{A.volMusic=+e.target.value/100; if(A.musicBus)A.musicBus.gain.value=A.volMusic;});
+document.getElementById('volStep').addEventListener('input',e=>{A.volStep=+e.target.value/100; if(A.stepBus)A.stepBus.gain.value=A.volStep;});
+document.getElementById('modes').addEventListener('click',e=>{const b=e.target.closest('button'); if(b)setMode(b.dataset.mode);});
+document.getElementById('vibes').addEventListener('click',e=>{const b=e.target.closest('button'); if(b)setVibe(b.dataset.vibe);});
+document.getElementById('togVinyl').addEventListener('click',e=>{
+  A.vinyl=!A.vinyl; e.target.classList.toggle('on',A.vinyl);
+  if(A.hissNode) A.hissNode.gain.gain.value=A.vinyl?0.012:0;
+});
+document.getElementById('togRain').addEventListener('click',e=>{
+  A.rain=!A.rain; e.target.classList.toggle('on',A.rain);
+  if(A.running){ A.rain?startRain():stopRain(); }
+});
+document.getElementById('play').addEventListener('click',()=>A.running?stop():start());
+
+setBpm(160); setMode('13'); setVibe('dusk');
+</script>
+</body>
+</html>
