@@ -143,9 +143,9 @@
   <div class="gap">
     <div class="clabel">氛圍</div>
     <div class="seg" id="vibes">
-      <button data-vibe="dusk" class="on"><span class="t">黃昏</span><span class="s">暖 · 大調</span></button>
-      <button data-vibe="rainy"><span class="t">雨後</span><span class="s">夢 · 下行</span></button>
-      <button data-vibe="midnight"><span class="t">深夜</span><span class="s">沉 · 小調</span></button>
+      <button data-vibe="rainy" class="on"><span class="t">雨後</span><span class="s">夢 · 下行</span></button>
+      <button data-vibe="citypop"><span class="t">律動</span><span class="s">City Pop · 點頭</span></button>
+      <button data-vibe="midnight"><span class="t">深夜</span><span class="s">沉 · 煙燻</span></button>
     </div>
     <div class="toggles">
       <div class="tog on" id="togVinyl">黑膠雜訊</div>
@@ -159,7 +159,7 @@
   </div>
 
   <button class="play" id="play">開始</button>
-  <div class="bgnote" id="bgnote">可在 <b>鎖屏 / 背景持續播放</b> · 改設定約 1 秒後生效</div>
+  <div class="bgnote" id="bgnote">可在 <b>鎖屏 / 背景持續播放</b> · 改設定後幾秒生效</div>
   <div class="note" id="note"></div>
 </div>
 
@@ -174,14 +174,16 @@
    左右腳 / 節拍視覺由 <audio>.currentTime 即時推算，與音檔同步。
    ============================================================ */
 const OfflineCtxClass = window.OfflineAudioContext||window.webkitOfflineAudioContext;
-const LOOP_MEASURES = 8;   // 渲染長度：8 小節（和弦進行 4 小節 ×2 輪）
-const LOOP_TAIL = 2.0;     // 額外渲染尾巴秒數，折回開頭做無縫循環
+const LOOP_MEASURES = 8;     // 渲染單元：8 小節（和弦進行 4 小節 ×2 輪）
+const LOOP_TAIL = 2.0;       // 額外渲染尾巴秒數，折回開頭做無縫接縫
+const LOOP_TARGET_SEC = 300; // 把無縫單元複製串接到約這個長度，讓 iOS 循環接縫極少出現
+const RENDER_SR = 32000;     // 取樣率：音樂高頻已被 7.2kHz 暖色濾波壓掉，32k 聽感無損且更省
 
 const A = {
-  bpm:160, mode:'13', vibe:'dusk',
+  bpm:160, mode:'13', vibe:'rainy',
   volMusic:0.72, volStep:0.55, vinyl:true, rain:false,
   running:false,
-  bg:{ el:null, url:null, rendering:false, silent:false, rb:null /* 目前音檔的 {bpm,mode}，給視覺用 */ },
+  bg:{ el:null, url:null, rendering:false, pending:false, silent:false, rb:null /* 目前音檔的 {bpm,mode}，給視覺用 */ },
   _lastStep:-1, _refreshTimer:null
 };
 
@@ -193,13 +195,37 @@ function noise(env,dur){
   return b;
 }
 
-/* ---------- 和弦進行 ---------- */
+/* ---------- 氛圍：和弦 + 音色/律動參數，讓三者各有個性 ----------
+   warm  : 主濾波截止 (Hz)，越低越暗
+   swing : 八分後拍延遲量 (× 十六分音符)，越大越慵懶
+   leadP : 每小節出現旋律音的機率
+   stabs : 和弦 (rhodes) 撥奏點 [{s, d=佔小節比例}]
+   pat   : kick/snare 落點、hat 間隔與開鈸點、bass 律動 [{s, n=和弦音序號, d=長度比例}]
+*/
 const VIBES = {
-  dusk:    { chords:[[60,64,67,71],[57,60,64,67],[62,65,69,72],[55,59,62,65]] }, // Cmaj7 Am7 Dm7 G7
-  rainy:   { chords:[[65,69,72,76],[64,67,71,74],[62,65,69,72],[60,64,67,71]] }, // Fmaj7 Em7 Dm7 Cmaj7
-  midnight:{ chords:[[57,60,64,67],[53,57,60,64],[60,64,67,71],[55,59,62,66]] }  // Am7 Fmaj7 Cmaj7 Em7
+  rainy: {  // 雨後 — 夢幻下行 (Fmaj7 Em7 Dm7 Cmaj7)
+    chords:[[65,69,72,76],[64,67,71,74],[62,65,69,72],[60,64,67,71]],
+    warm:7200, swing:0.18, leadP:0.45,
+    stabs:[{s:0,d:0.95}],
+    pat:{ kick:[0,8], snare:[4,12], hatStep:2, hatOpen:[6,14],
+          bass:[{s:0,n:0,d:0.5},{s:8,n:1,d:0.45}] }
+  },
+  citypop: {  // 律動 City Pop — 明亮有 groove (Gmaj9 Em7 Am7 D7)
+    chords:[[67,71,74,78],[64,67,71,74],[69,72,76,79],[62,66,69,72]],
+    warm:9000, swing:0.08, leadP:0.30,
+    stabs:[{s:0,d:0.45},{s:8,d:0.45}],
+    pat:{ kick:[0,8,14], snare:[4,12], hatStep:2, hatOpen:[2,10],
+          bass:[{s:0,n:0,d:0.25},{s:3,n:0,d:0.2},{s:8,n:2,d:0.25},{s:11,n:0,d:0.2}] }
+  },
+  midnight: {  // 深夜 — 煙燻爵士、暗、留白 (Cm7 Fm7 Dm7b5 G7)
+    chords:[[60,63,67,70],[53,56,60,63],[62,65,68,72],[55,59,62,65]],
+    warm:5200, swing:0.34, leadP:0.22,
+    stabs:[{s:0,d:0.97}],
+    pat:{ kick:[0,8], snare:[12], hatStep:2, hatOpen:[14],
+          bass:[{s:0,n:0,d:0.9}] }
+  }
 };
-const VIBE_NAMES = {dusk:'黃昏', rainy:'雨後', midnight:'深夜'};
+const VIBE_NAMES = {rainy:'雨後', citypop:'律動', midnight:'深夜'};
 
 /* ---------- 音色 (皆接收 env = {ctx, musicBus, stepBus, texBus, wobble}) ---------- */
 function rhodes(env,notes,t,dur){
@@ -278,20 +304,20 @@ function stepTick(env,t,acc){
 function scheduleStep(env, s, t, measure, cfg){
   const sixteenth = 60/cfg.musicBpm/4;
   const measDur = sixteenth*16;
-  const chords = VIBES[cfg.vibe].chords;
-  const chord = chords[measure % chords.length];
+  const V = VIBES[cfg.vibe];
+  const chord = V.chords[measure % V.chords.length];
 
   // 鼓
-  if(s===0||s===8) kick(env,t);
-  if(s===4||s===12) snare(env,t);
-  if(s%2===0){ // 八分音符 hi-hat, 偶數帶點 swing
-    const swing = (s%4===2)? sixteenth*0.18 : 0;
-    hat(env,t+swing, s===6||s===14);
+  if(V.pat.kick.includes(s)) kick(env,t);
+  if(V.pat.snare.includes(s)) snare(env,t);
+  if(s % V.pat.hatStep === 0){ // hi-hat，後拍帶 swing
+    const swing = (Math.floor(s/V.pat.hatStep) % 2 === 1) ? sixteenth*V.swing : 0;
+    hat(env, t+swing, V.pat.hatOpen.includes(s));
   }
-  // 和弦 / bass / 旋律
-  if(s===0){ rhodes(env,chord,t,measDur*0.95); bass(env,chord[0],t,measDur*0.5); }
-  if(s===8){ bass(env,chord[1],t,measDur*0.45); }
-  if(s===10 && Math.random()<0.45){ lead(env,chord[1+Math.floor(Math.random()*3)],t); }
+  // 和弦撥奏 / bass / 旋律
+  for(const st of V.stabs){ if(st.s===s) rhodes(env, chord, t, measDur*st.d); }
+  for(const b of V.pat.bass){ if(b.s===s) bass(env, chord[b.n % chord.length], t, measDur*b.d); }
+  if(s===10 && Math.random()<V.leadP){ lead(env, chord[1+Math.floor(Math.random()*(chord.length-1))], t); }
 
   // 黑膠雜訊 crackle
   if(cfg.vinyl && Math.random()<0.5) crackle(env,t+Math.random()*sixteenth);
@@ -335,11 +361,12 @@ async function renderLoop(cfg){
   const sixteenth = 60/cfg.musicBpm/4;
   const measDur = sixteenth*16;
   const loopDur = measDur*LOOP_MEASURES;
-  const sr = 44100;
+  const sr = RENDER_SR;
   const total = loopDur + LOOP_TAIL;
   const octx = new OfflineCtxClass(1, Math.ceil(total*sr), sr);
   const master=octx.createGain(); master.gain.value=0.9; master.connect(octx.destination);
-  const warm=octx.createBiquadFilter(); warm.type='lowpass'; warm.frequency.value=7200; warm.Q.value=0.3;
+  const warm=octx.createBiquadFilter(); warm.type='lowpass';
+  warm.frequency.value=(VIBES[cfg.vibe]&&VIBES[cfg.vibe].warm)||7200; warm.Q.value=0.3;
   warm.connect(master);
   const musicBus=octx.createGain(); musicBus.gain.value=cfg.volMusic; musicBus.connect(warm);
   const stepBus=octx.createGain(); stepBus.gain.value=cfg.volStep; stepBus.connect(master);
@@ -358,12 +385,16 @@ async function renderLoop(cfg){
   const rendered = await octx.startRendering();
   const data = rendered.getChannelData(0);
   const loopLen = Math.round(loopDur*sr);
-  const out = new Float32Array(loopLen);
-  out.set(data.subarray(0, loopLen));
-  // 尾巴折回開頭 (overlap-add) → 無縫接縫
+  const one = new Float32Array(loopLen);
+  one.set(data.subarray(0, loopLen));
+  // 尾巴折回開頭 (overlap-add) → 單元本身首尾無縫
   const tailLen = Math.min(data.length-loopLen, Math.floor(LOOP_TAIL*sr));
-  for(let i=0;i<tailLen;i++) out[i] += data[loopLen+i];
-  return URL.createObjectURL(encodeWav(out, sr));
+  for(let i=0;i<tailLen;i++) one[i] += data[loopLen+i];
+  // 複製多份串接成長檔：每個內部接點都與循環點相同(無縫)，只剩整檔最後繞回才有 iOS 接縫空隙
+  const REPEAT = Math.max(1, Math.round(LOOP_TARGET_SEC/loopDur));
+  const outLong = new Float32Array(loopLen*REPEAT);
+  for(let k=0;k<REPEAT;k++) outLong.set(one, k*loopLen);
+  return URL.createObjectURL(encodeWav(outLong, sr));
 }
 
 function renderCfg(){
@@ -371,9 +402,12 @@ function renderCfg(){
           volMusic:A.volMusic, volStep:A.volStep};
 }
 /* 渲染目前設定 → 換上正在播放的 <audio>（前景才會換；背景無法改設定） */
+const BGNOTE_DEFAULT='可在 <b>鎖屏 / 背景持續播放</b> · 改設定後幾秒生效';
+function setBgNote(html){ const n=document.getElementById('bgnote'); if(n) n.innerHTML=html; }
 async function refreshLoop(){
-  if(A.bg.rendering) return;
+  if(A.bg.rendering){ A.bg.pending=true; return; }   // 渲染中又改設定 → 標記，結束後補渲一次
   A.bg.rendering=true;
+  if(A.running) setBgNote('正在套用新設定…');
   const reqBpm=A.bpm, reqMode=A.mode;
   try{
     const url = await renderLoop(renderCfg());
@@ -388,7 +422,11 @@ async function refreshLoop(){
     }
     if(old) URL.revokeObjectURL(old);
   }catch(e){ /* 渲染失敗 → 沿用舊的循環 */ }
-  finally{ A.bg.rendering=false; }
+  finally{
+    A.bg.rendering=false;
+    if(A.bg.pending){ A.bg.pending=false; refreshLoop(); }   // 補渲最新設定
+    else if(A.running) setBgNote(BGNOTE_DEFAULT);
+  }
 }
 function scheduleRefresh(){
   clearTimeout(A._refreshTimer);
@@ -521,7 +559,7 @@ document.getElementById('play').addEventListener('click',()=>A.running?stop():st
 
 A.bg.el=document.getElementById('bgLoop');
 setupMediaSession();
-setBpm(160); setMode('13'); setVibe('dusk');
+setBpm(160); setMode('13'); setVibe('rainy');
 refreshLoop();   // 載入即預先渲染好預設循環，按「開始」就能直接播放
 </script>
 </body>
