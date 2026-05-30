@@ -96,6 +96,7 @@
   .play{width:100%;padding:20px;border:none;border-radius:16px;background:var(--accent);color:#1a1320;
     font-size:17px;font-weight:800;letter-spacing:.2em;cursor:pointer;transition:.14s;text-transform:uppercase;}
   .play.running{background:#1a1320;color:var(--accent);border:1px solid var(--accent);}
+  .play.loading{opacity:.6;}
   .play:active{transform:scale(.98);}
 
   .note{font-size:11.5px;line-height:1.7;color:var(--muted);border-left:2px solid var(--accent2);
@@ -158,26 +159,30 @@
   </div>
 
   <button class="play" id="play">開始</button>
-  <div class="bgnote" id="bgnote">螢幕鎖屏 / 切到背景時 <b>自動接續播放</b></div>
+  <div class="bgnote" id="bgnote">可在 <b>鎖屏 / 背景持續播放</b> · 改設定約 1 秒後生效</div>
   <div class="note" id="note"></div>
 </div>
 
 <audio id="bgLoop" loop playsinline preload="auto"></audio>
 
 <script>
-const ctxClass = window.AudioContext||window.webkitAudioContext;
+/* ============================================================
+   running-cadence-lofi
+   架構：聲音來源是「一段持續播放的預渲染循環音檔」(<audio>)。
+   前景與背景都播同一個元素，所以 iOS 鎖屏 / 切背景能繼續播。
+   改設定 → 用 OfflineAudioContext 重新渲染循環，無縫換上。
+   左右腳 / 節拍視覺由 <audio>.currentTime 即時推算，與音檔同步。
+   ============================================================ */
 const OfflineCtxClass = window.OfflineAudioContext||window.webkitOfflineAudioContext;
 const LOOP_MEASURES = 8;   // 渲染長度：8 小節（和弦進行 4 小節 ×2 輪）
 const LOOP_TAIL = 2.0;     // 額外渲染尾巴秒數，折回開頭做無縫循環
 
 const A = {
-  bpm:160, mode:'13', vibe:'dusk', running:false, fg:false,
+  bpm:160, mode:'13', vibe:'dusk',
   volMusic:0.72, volStep:0.55, vinyl:true, rain:false,
-  // 即時引擎狀態
-  live:null, next:0, s16:0, measure:0, step:0, timer:null, vis:[],
-  // 背景循環狀態
-  bg:{el:null, url:null, rendering:false, timer:null},
-  _fade:null
+  running:false,
+  bg:{ el:null, url:null, rendering:false, silent:false, rb:null /* 目前音檔的 {bpm,mode}，給視覺用 */ },
+  _lastStep:-1, _refreshTimer:null
 };
 
 function midiHz(m){ return 440*Math.pow(2,(m-69)/12); }
@@ -269,8 +274,8 @@ function stepTick(env,t,acc){
 }
 
 /* ---------- 排程 (16分音符網格, 音樂速度) ---------- */
-/* cfg = {musicBpm, mode, vibe, vinyl}; live = 即時狀態物件 (含 vis/step) 或 null */
-function scheduleStep(env, s, t, measure, cfg, live){
+/* cfg = {musicBpm, mode, vibe, vinyl} */
+function scheduleStep(env, s, t, measure, cfg){
   const sixteenth = 60/cfg.musicBpm/4;
   const measDur = sixteenth*16;
   const chords = VIBES[cfg.vibe].chords;
@@ -295,81 +300,7 @@ function scheduleStep(env, s, t, measure, cfg, live){
   if(s%2===0){
     const acc = cfg.mode==='even' ? true : (s===0||s===8);
     stepTick(env,t,acc);
-    if(live){ live.vis.push({step:live.step,acc:acc,beat:Math.floor(s/4),t:t}); live.step++; }
   }
-}
-
-function liveCfg(){
-  return {musicBpm:A.bpm/2, mode:A.mode, vibe:A.vibe, vinyl:A.vinyl};
-}
-
-/* ---------- 即時引擎 (前景) ---------- */
-function scheduler(){
-  if(!A.fg || !A.live) return;
-  const cfg = liveCfg();
-  const sixteenth = 60/cfg.musicBpm/4;
-  while(A.next < A.live.ctx.currentTime + 0.14){
-    scheduleStep(A.live, A.s16, A.next, A.measure, cfg, A);
-    A.s16 = (A.s16+1)%16;
-    if(A.s16===0) A.measure++;
-    A.next += sixteenth;
-  }
-}
-function draw(){
-  if(!A.fg || !A.live) return;
-  const now=A.live.ctx.currentTime;
-  while(A.vis.length && A.vis[0].t<=now){ paint(A.vis.shift()); }
-  requestAnimationFrame(draw);
-}
-function paint(ev){
-  const foot = ev.step%2; // 0 = L, 1 = R
-  const L=document.getElementById('footL'), R=document.getElementById('footR');
-  L.classList.remove('on','acc'); R.classList.remove('on','acc');
-  const el = foot===0? L : R;
-  el.classList.add('on'); if(ev.acc) el.classList.add('acc');
-  const bs=document.querySelectorAll('#beatrow .b');
-  bs.forEach((b,i)=>b.classList.toggle('on', i===ev.beat));
-}
-function clearVisuals(){
-  document.getElementById('footL').classList.remove('on','acc');
-  document.getElementById('footR').classList.remove('on','acc');
-  document.querySelectorAll('#beatrow .b').forEach(b=>b.classList.remove('on'));
-}
-
-function buildLive(){
-  const ctx=new ctxClass();
-  const master=ctx.createGain(); master.gain.value=0.9; master.connect(ctx.destination);
-  const warm=ctx.createBiquadFilter(); warm.type='lowpass'; warm.frequency.value=7200; warm.Q.value=0.3;
-  warm.connect(master);
-  const musicBus=ctx.createGain(); musicBus.gain.value=A.volMusic; musicBus.connect(warm);
-  const stepBus=ctx.createGain(); stepBus.gain.value=A.volStep; stepBus.connect(master);
-  const texBus=ctx.createGain(); texBus.gain.value=0.9; texBus.connect(master);
-  const wd=ctx.createGain(); wd.gain.value=7;
-  const lfo=ctx.createOscillator(); lfo.frequency.value=0.55; lfo.connect(wd); lfo.start();
-  A.live={ctx,master,warm,musicBus,stepBus,texBus,wobble:wd,hiss:null,rainNode:null};
-  // 連續黑膠 hiss
-  const hiss=ctx.createBufferSource(); hiss.buffer=noise(A.live,2); hiss.loop=true;
-  const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=4000;
-  const hg=ctx.createGain(); hg.gain.value=A.vinyl?0.012:0;
-  hiss.connect(hp).connect(hg).connect(texBus); hiss.start();
-  A.live.hiss=hg;
-}
-function startRain(){
-  if(!A.live || A.live.rainNode) return;
-  const ctx=A.live.ctx;
-  const src=ctx.createBufferSource(); src.buffer=noise(A.live,2); src.loop=true;
-  const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=3200; bp.Q.value=0.4;
-  const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=6500;
-  const g=ctx.createGain(); g.gain.value=0.0001;
-  src.connect(bp).connect(lp).connect(g).connect(A.live.texBus); src.start();
-  g.gain.exponentialRampToValueAtTime(0.09,ctx.currentTime+0.8);
-  A.live.rainNode={src:src,gain:g};
-}
-function stopRain(){
-  if(!A.live || !A.live.rainNode) return;
-  const ctx=A.live.ctx, r=A.live.rainNode; A.live.rainNode=null;
-  r.gain.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+0.5);
-  r.src.stop(ctx.currentTime+0.6);
 }
 
 /* ---------- 離線渲染：把目前設定算成一段無縫循環音檔 ---------- */
@@ -407,7 +338,6 @@ async function renderLoop(cfg){
   const sr = 44100;
   const total = loopDur + LOOP_TAIL;
   const octx = new OfflineCtxClass(1, Math.ceil(total*sr), sr);
-  // 匯流排拓樸與即時引擎一致；音量/雜訊/雨聲都在此烤進音檔
   const master=octx.createGain(); master.gain.value=0.9; master.connect(octx.destination);
   const warm=octx.createBiquadFilter(); warm.type='lowpass'; warm.frequency.value=7200; warm.Q.value=0.3;
   warm.connect(master);
@@ -422,7 +352,7 @@ async function renderLoop(cfg){
   const stepCfg = {musicBpm:cfg.musicBpm, mode:cfg.mode, vibe:cfg.vibe, vinyl:cfg.vinyl};
   for(let m=0;m<LOOP_MEASURES;m++){
     for(let s=0;s<16;s++){
-      scheduleStep(env, s, (m*16+s)*sixteenth, m, stepCfg, null);
+      scheduleStep(env, s, (m*16+s)*sixteenth, m, stepCfg);
     }
   }
   const rendered = await octx.startRendering();
@@ -440,66 +370,65 @@ function renderCfg(){
   return {musicBpm:A.bpm/2, mode:A.mode, vibe:A.vibe, vinyl:A.vinyl, rain:A.rain,
           volMusic:A.volMusic, volStep:A.volStep};
 }
+/* 渲染目前設定 → 換上正在播放的 <audio>（前景才會換；背景無法改設定） */
 async function refreshLoop(){
-  if(!A.running || A.bg.rendering) return;
+  if(A.bg.rendering) return;
   A.bg.rendering=true;
+  const reqBpm=A.bpm, reqMode=A.mode;
   try{
     const url = await renderLoop(renderCfg());
-    if(!A.running){ URL.revokeObjectURL(url); return; }
-    if(A.bg.url) URL.revokeObjectURL(A.bg.url);
-    A.bg.url=url;
-    if(A.fg && A.bg.el){ A.bg.el.src=url; A.bg.el.load(); }  // 前景時預載，背景接手用
-  }catch(e){ /* 渲染失敗就沿用舊的循環 */ }
+    const old = A.bg.url; A.bg.url=url; A.bg.rb={bpm:reqBpm, mode:reqMode};
+    const el=A.bg.el;
+    if(A.running){
+      el.src=url; A.bg.silent=false; el.currentTime=0;
+      const p=el.play(); if(p&&p.catch) p.catch(()=>{});
+      A._lastStep=-1;
+    } else {
+      el.src=url;   // 預載，下次開始即可直接播
+    }
+    if(old) URL.revokeObjectURL(old);
+  }catch(e){ /* 渲染失敗 → 沿用舊的循環 */ }
   finally{ A.bg.rendering=false; }
 }
-let _refreshTimer=null;
 function scheduleRefresh(){
-  if(!A.running) return;
-  clearTimeout(_refreshTimer);
-  _refreshTimer=setTimeout(refreshLoop,250);
+  clearTimeout(A._refreshTimer);
+  A._refreshTimer=setTimeout(refreshLoop,250);
 }
 
-/* 靜音 WAV：用使用者點擊的手勢「解鎖」<audio>，之後才能在背景以程式 play() */
+/* 靜音 WAV：使用者首次點擊但循環尚未渲染好時，先用它持續播放佔住音訊工作階段 */
 const SILENT_URL = URL.createObjectURL(encodeWav(new Float32Array(2400), 8000));
 
-/* ---------- 前景/背景接手 ---------- */
-function loopDurNow(){ return 16*LOOP_MEASURES*(60/(A.bpm/2)/4); }
-function goBackground(){
-  if(!A.running || !A.fg) return;
-  A.fg=false;
-  clearInterval(A.timer); A.timer=null;
-  const el=A.bg.el;
-  if(el && A.bg.url){
-    const sixteenth=60/(A.bpm/2)/4;
-    const pos=(((A.measure%LOOP_MEASURES)*16 + A.s16)*sixteenth) % loopDurNow();
-    if(el.src!==A.bg.url){ el.src=A.bg.url; el.load(); }
-    try{ el.currentTime=pos; }catch(e){}
-    el.volume=0;
-    const pr=el.play(); if(pr&&pr.catch) pr.catch(()=>{});
-    let v=0; clearInterval(A._fade);
-    A._fade=setInterval(()=>{ v=Math.min(1,v+0.12); el.volume=v; if(v>=1) clearInterval(A._fade); },20);
-  }
-  if(A.live && A.live.ctx.state==='running') A.live.ctx.suspend();
-  if('mediaSession' in navigator) navigator.mediaSession.playbackState='playing';
+/* ---------- 視覺：由 <audio>.currentTime 推算左右腳 / 拍 ---------- */
+function paint(foot, acc, beat){
+  const L=document.getElementById('footL'), R=document.getElementById('footR');
+  L.classList.remove('on','acc'); R.classList.remove('on','acc');
+  const el = foot===0? L : R;
+  el.classList.add('on'); if(acc) el.classList.add('acc');
+  document.querySelectorAll('#beatrow .b').forEach((b,i)=>b.classList.toggle('on', i===beat));
 }
-function goForeground(){
-  if(!A.running || A.fg) return;
-  A.fg=true;
-  const el=A.bg.el;
-  clearInterval(A._fade);
-  const resumeAt = (el && !isNaN(el.currentTime)) ? el.currentTime : 0;
-  if(el){ el.pause(); }
-  if(A.live){
-    A.live.ctx.resume();
-    const sixteenth=60/(A.bpm/2)/4;
-    // 回前景時即時引擎從對應小節的下一個下拍重新接上 (步伐左右對齊)
-    A.measure = Math.floor(resumeAt/(16*sixteenth)) % LOOP_MEASURES;
-    A.s16=0; A.step=0; A.vis=[];
-    A.next=A.live.ctx.currentTime+0.08;
-    A.timer=setInterval(scheduler,25);
-    requestAnimationFrame(draw);
+function clearVisuals(){
+  document.getElementById('footL').classList.remove('on','acc');
+  document.getElementById('footR').classList.remove('on','acc');
+  document.querySelectorAll('#beatrow .b').forEach(b=>b.classList.remove('on'));
+}
+function visLoop(){
+  if(!A.running) return;
+  const el=A.bg.el, rb=A.bg.rb;
+  if(el && !el.paused && !A.bg.silent && rb && el.duration){
+    const sixteenth = 60/(rb.bpm/2)/4;
+    const stepDur = sixteenth*2;          // 每步 = 八分音符
+    const measDur = sixteenth*16;
+    const t = el.currentTime;
+    const stepGlobal = Math.floor(t/stepDur);
+    if(stepGlobal!==A._lastStep){
+      A._lastStep=stepGlobal;
+      const stepInMeas = Math.floor((t % measDur)/stepDur) % 8;
+      const s = stepInMeas*2;
+      const acc = rb.mode==='even' ? true : (s===0||s===8);
+      paint(stepInMeas%2, acc, Math.floor(stepInMeas/2));
+    }
   }
-  if(A.bg.url && el && el.src!==A.bg.url){ el.src=A.bg.url; el.load(); }
+  requestAnimationFrame(visLoop);
 }
 
 /* ---------- MediaSession 鎖屏控制 ---------- */
@@ -516,18 +445,9 @@ function updateMedia(){
 function setupMediaSession(){
   if(!('mediaSession' in navigator)) return;
   try{
-    navigator.mediaSession.setActionHandler('pause', ()=>{
-      const el=A.bg.el;
-      if(!A.fg && el && !el.paused){ el.pause(); navigator.mediaSession.playbackState='paused'; }
-      else stop();
-    });
-    navigator.mediaSession.setActionHandler('play', ()=>{
-      const el=A.bg.el;
-      if(A.running && !A.fg && el && el.paused && A.bg.url){
-        el.play(); navigator.mediaSession.playbackState='playing';
-      } else if(!A.running){ start(); }
-    });
-    navigator.mediaSession.setActionHandler('stop', ()=>stop());
+    navigator.mediaSession.setActionHandler('play', ()=>{ if(!A.running) start(); });
+    navigator.mediaSession.setActionHandler('pause', ()=>{ if(A.running) stop(); });
+    navigator.mediaSession.setActionHandler('stop', ()=>{ if(A.running) stop(); });
   }catch(e){}
 }
 
@@ -538,38 +458,33 @@ function setBpm(v){
   document.getElementById('bpmVal').textContent=A.bpm;
   document.getElementById('bpmSub').textContent=`音樂速度 ${Math.round(A.bpm/2)} BPM · 每拍兩步`;
   document.getElementById('bpm').style.setProperty('--pct',((A.bpm-140)/50*100)+'%');
-  if(A.live){ /* 即時速度由 scheduler 讀取，無需額外動作 */ }
   updateMedia(); scheduleRefresh();
 }
 
 function start(){
-  if(!A.live) buildLive();
-  A.live.ctx.resume();
-  A.running=true; A.fg=true;
-  A.s16=0; A.measure=0; A.step=0; A.vis=[]; A.next=A.live.ctx.currentTime+0.1;
-  if(A.rain) startRain();
-  // 用此次點擊手勢解鎖背景 <audio>
-  try{
-    A.bg.el.src=SILENT_URL;
-    const p=A.bg.el.play();
-    if(p&&p.then) p.then(()=>A.bg.el.pause()).catch(()=>{});
-  }catch(e){}
-  refreshLoop();                       // 非同步渲染背景循環
-  A.timer=setInterval(scheduler,25);
-  requestAnimationFrame(draw);
+  A.running=true;
+  const el=A.bg.el;
+  if(A.bg.url){
+    if(el.src!==A.bg.url) el.src=A.bg.url;
+    A.bg.silent=false;
+  } else {
+    el.src=SILENT_URL; A.bg.silent=true;   // 還沒渲染好 → 先用靜音持續播放，渲染完成後換上
+  }
+  el.currentTime=0;
+  const p=el.play(); if(p&&p.catch) p.catch(()=>{});
+  if(!A.bg.url) refreshLoop();
+  A._lastStep=-1;
+  requestAnimationFrame(visLoop);
   updateMedia();
   if('mediaSession' in navigator) navigator.mediaSession.playbackState='playing';
-  const p=document.getElementById('play'); p.textContent='停止'; p.classList.add('running');
+  const b=document.getElementById('play'); b.textContent='停止'; b.classList.add('running');
 }
 function stop(){
-  A.running=false; A.fg=false;
-  clearInterval(A.timer); A.timer=null;
-  clearInterval(A._fade); clearTimeout(_refreshTimer);
-  if(A.bg.el){ A.bg.el.pause(); }
-  if(A.live){ stopRain(); }
+  A.running=false;
+  if(A.bg.el) A.bg.el.pause();
   clearVisuals();
   if('mediaSession' in navigator) navigator.mediaSession.playbackState='paused';
-  const p=document.getElementById('play'); p.textContent='開始'; p.classList.remove('running');
+  const b=document.getElementById('play'); b.textContent='開始'; b.classList.remove('running');
 }
 
 const NOTES={
@@ -592,39 +507,22 @@ function setVibe(v){
 document.getElementById('bpm').addEventListener('input',e=>setBpm(+e.target.value));
 document.getElementById('plus').addEventListener('click',()=>setBpm(A.bpm+1));
 document.getElementById('minus').addEventListener('click',()=>setBpm(A.bpm-1));
-document.getElementById('volMusic').addEventListener('input',e=>{
-  A.volMusic=+e.target.value/100;
-  if(A.live) A.live.musicBus.gain.value=A.volMusic;
-  scheduleRefresh();
-});
-document.getElementById('volStep').addEventListener('input',e=>{
-  A.volStep=+e.target.value/100;
-  if(A.live) A.live.stepBus.gain.value=A.volStep;
-  scheduleRefresh();
-});
+document.getElementById('volMusic').addEventListener('input',e=>{ A.volMusic=+e.target.value/100; scheduleRefresh(); });
+document.getElementById('volStep').addEventListener('input',e=>{ A.volStep=+e.target.value/100; scheduleRefresh(); });
 document.getElementById('modes').addEventListener('click',e=>{const b=e.target.closest('button'); if(b)setMode(b.dataset.mode);});
 document.getElementById('vibes').addEventListener('click',e=>{const b=e.target.closest('button'); if(b)setVibe(b.dataset.vibe);});
 document.getElementById('togVinyl').addEventListener('click',e=>{
-  A.vinyl=!A.vinyl; e.target.classList.toggle('on',A.vinyl);
-  if(A.live && A.live.hiss) A.live.hiss.gain.value=A.vinyl?0.012:0;
-  scheduleRefresh();
+  A.vinyl=!A.vinyl; e.target.classList.toggle('on',A.vinyl); scheduleRefresh();
 });
 document.getElementById('togRain').addEventListener('click',e=>{
-  A.rain=!A.rain; e.target.classList.toggle('on',A.rain);
-  if(A.fg){ A.rain?startRain():stopRain(); }
-  scheduleRefresh();
+  A.rain=!A.rain; e.target.classList.toggle('on',A.rain); scheduleRefresh();
 });
 document.getElementById('play').addEventListener('click',()=>A.running?stop():start());
-
-document.addEventListener('visibilitychange',()=>{
-  if(!A.running) return;
-  if(document.hidden) goBackground(); else goForeground();
-});
-window.addEventListener('pagehide',()=>{ if(A.running && A.fg) goBackground(); });
 
 A.bg.el=document.getElementById('bgLoop');
 setupMediaSession();
 setBpm(160); setMode('13'); setVibe('dusk');
+refreshLoop();   // 載入即預先渲染好預設循環，按「開始」就能直接播放
 </script>
 </body>
 </html>
