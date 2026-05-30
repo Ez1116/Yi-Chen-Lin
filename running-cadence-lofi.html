@@ -102,6 +102,8 @@
     padding:2px 0 2px 12px;}
   .note b{color:var(--txt);font-weight:600;}
   .gap{display:flex;flex-direction:column;gap:12px;}
+  .bgnote{font-size:10.5px;letter-spacing:.04em;color:var(--muted);text-align:center;margin-top:-4px;}
+  .bgnote b{color:var(--accent2);font-weight:600;}
 </style>
 </head>
 <body>
@@ -156,22 +158,31 @@
   </div>
 
   <button class="play" id="play">開始</button>
+  <div class="bgnote" id="bgnote">螢幕鎖屏 / 切到背景時 <b>自動接續播放</b></div>
   <div class="note" id="note"></div>
 </div>
 
+<audio id="bgLoop" loop playsinline preload="auto"></audio>
+
 <script>
 const ctxClass = window.AudioContext||window.webkitAudioContext;
+const OfflineCtxClass = window.OfflineAudioContext||window.webkitOfflineAudioContext;
+const LOOP_MEASURES = 8;   // 渲染長度：8 小節（和弦進行 4 小節 ×2 輪）
+const LOOP_TAIL = 2.0;     // 額外渲染尾巴秒數，折回開頭做無縫循環
+
 const A = {
-  ctx:null, master:null, musicBus:null, warm:null, stepBus:null, texBus:null,
-  bpm:160, mode:'13', vibe:'dusk', running:false,
-  next:0, s16:0, measure:0, step:0, timer:null, vis:[],
+  bpm:160, mode:'13', vibe:'dusk', running:false, fg:false,
   volMusic:0.72, volStep:0.55, vinyl:true, rain:false,
-  wobbleLFO:null, rainNode:null, hissNode:null
+  // 即時引擎狀態
+  live:null, next:0, s16:0, measure:0, step:0, timer:null, vis:[],
+  // 背景循環狀態
+  bg:{el:null, url:null, rendering:false, timer:null},
+  _fade:null
 };
 
 function midiHz(m){ return 440*Math.pow(2,(m-69)/12); }
-function noise(dur){
-  const b=A.ctx.createBuffer(1,Math.max(1,A.ctx.sampleRate*dur),A.ctx.sampleRate);
+function noise(env,dur){
+  const b=env.ctx.createBuffer(1,Math.max(1,env.ctx.sampleRate*dur),env.ctx.sampleRate);
   const d=b.getChannelData(0);
   for(let i=0;i<d.length;i++) d[i]=Math.random()*2-1;
   return b;
@@ -183,124 +194,130 @@ const VIBES = {
   rainy:   { chords:[[65,69,72,76],[64,67,71,74],[62,65,69,72],[60,64,67,71]] }, // Fmaj7 Em7 Dm7 Cmaj7
   midnight:{ chords:[[57,60,64,67],[53,57,60,64],[60,64,67,71],[55,59,62,66]] }  // Am7 Fmaj7 Cmaj7 Em7
 };
+const VIBE_NAMES = {dusk:'黃昏', rainy:'雨後', midnight:'深夜'};
 
-/* ---------- 音色 ---------- */
-function rhodes(notes,t,dur){
+/* ---------- 音色 (皆接收 env = {ctx, musicBus, stepBus, texBus, wobble}) ---------- */
+function rhodes(env,notes,t,dur){
   notes.forEach((m,i)=>{
     const f=midiHz(m);
-    const g=A.ctx.createGain();
-    const lp=A.ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1500; lp.Q.value=0.6;
+    const g=env.ctx.createGain();
+    const lp=env.ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=1500; lp.Q.value=0.6;
     g.gain.setValueAtTime(0.0001,t);
     g.gain.exponentialRampToValueAtTime(0.16/notes.length+0.04,t+0.05);
     g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
     [0,7].forEach(det=>{
-      const o=A.ctx.createOscillator();
+      const o=env.ctx.createOscillator();
       o.type = det? 'sine':'triangle';
       o.frequency.value=f; o.detune.value=det;
-      if(A.wobbleLFO) A.wobbleLFO.connect(o.detune);
+      if(env.wobble) env.wobble.connect(o.detune);
       o.connect(g); o.start(t); o.stop(t+dur+0.1);
     });
-    g.connect(lp).connect(A.musicBus);
+    g.connect(lp).connect(env.musicBus);
   });
 }
-function bass(m,t,dur){
-  const o=A.ctx.createOscillator(), g=A.ctx.createGain();
+function bass(env,m,t,dur){
+  const o=env.ctx.createOscillator(), g=env.ctx.createGain();
   o.type='triangle'; o.frequency.value=midiHz(m-12);
   g.gain.setValueAtTime(0.0001,t);
   g.gain.exponentialRampToValueAtTime(0.4,t+0.03);
   g.gain.exponentialRampToValueAtTime(0.0001,t+dur);
-  o.connect(g).connect(A.musicBus); o.start(t); o.stop(t+dur+0.05);
+  o.connect(g).connect(env.musicBus); o.start(t); o.stop(t+dur+0.05);
 }
-function lead(m,t){
-  const o=A.ctx.createOscillator(), g=A.ctx.createGain();
+function lead(env,m,t){
+  const o=env.ctx.createOscillator(), g=env.ctx.createGain();
   o.type='sine'; o.frequency.value=midiHz(m+12);
   g.gain.setValueAtTime(0.0001,t);
   g.gain.exponentialRampToValueAtTime(0.12,t+0.02);
   g.gain.exponentialRampToValueAtTime(0.0001,t+0.6);
-  o.connect(g).connect(A.musicBus); o.start(t); o.stop(t+0.7);
+  o.connect(g).connect(env.musicBus); o.start(t); o.stop(t+0.7);
 }
-function kick(t){
-  const o=A.ctx.createOscillator(), g=A.ctx.createGain();
+function kick(env,t){
+  const o=env.ctx.createOscillator(), g=env.ctx.createGain();
   o.frequency.setValueAtTime(130,t); o.frequency.exponentialRampToValueAtTime(45,t+0.12);
   g.gain.setValueAtTime(0.0001,t);
   g.gain.exponentialRampToValueAtTime(0.9,t+0.005);
   g.gain.exponentialRampToValueAtTime(0.0001,t+0.22);
-  o.connect(g).connect(A.musicBus); o.start(t); o.stop(t+0.25);
+  o.connect(g).connect(env.musicBus); o.start(t); o.stop(t+0.25);
 }
-function snare(t){
-  const n=A.ctx.createBufferSource(); n.buffer=noise(0.2);
-  const bp=A.ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1900; bp.Q.value=0.7;
-  const g=A.ctx.createGain();
+function snare(env,t){
+  const n=env.ctx.createBufferSource(); n.buffer=noise(env,0.2);
+  const bp=env.ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=1900; bp.Q.value=0.7;
+  const g=env.ctx.createGain();
   g.gain.setValueAtTime(0.28,t); g.gain.exponentialRampToValueAtTime(0.0001,t+0.16);
-  n.connect(bp).connect(g).connect(A.musicBus); n.start(t); n.stop(t+0.2);
+  n.connect(bp).connect(g).connect(env.musicBus); n.start(t); n.stop(t+0.2);
 }
-function hat(t,open){
-  const n=A.ctx.createBufferSource(); n.buffer=noise(open?0.12:0.04);
-  const hp=A.ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=7500;
-  const g=A.ctx.createGain();
+function hat(env,t,open){
+  const n=env.ctx.createBufferSource(); n.buffer=noise(env,open?0.12:0.04);
+  const hp=env.ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=7500;
+  const g=env.ctx.createGain();
   g.gain.setValueAtTime(open?0.1:0.08,t); g.gain.exponentialRampToValueAtTime(0.0001,t+(open?0.12:0.045));
-  n.connect(hp).connect(g).connect(A.musicBus); n.start(t); n.stop(t+0.13);
+  n.connect(hp).connect(g).connect(env.musicBus); n.start(t); n.stop(t+0.13);
 }
-function crackle(t){
-  const n=A.ctx.createBufferSource(); n.buffer=noise(0.02);
-  const hp=A.ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=3000;
-  const g=A.ctx.createGain(); g.gain.value=0.05+Math.random()*0.06;
-  n.connect(hp).connect(g).connect(A.texBus); n.start(t); n.stop(t+0.02);
+function crackle(env,t){
+  const n=env.ctx.createBufferSource(); n.buffer=noise(env,0.02);
+  const hp=env.ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=3000;
+  const g=env.ctx.createGain(); g.gain.value=0.05+Math.random()*0.06;
+  n.connect(hp).connect(g).connect(env.texBus); n.start(t); n.stop(t+0.02);
 }
-function stepTick(t,acc){
-  const o=A.ctx.createOscillator(), g=A.ctx.createGain();
+function stepTick(env,t,acc){
+  const o=env.ctx.createOscillator(), g=env.ctx.createGain();
   o.type='triangle'; o.frequency.value=acc?1500:1050;
   g.gain.setValueAtTime(0.0001,t);
   g.gain.exponentialRampToValueAtTime(acc?0.9:0.5,t+0.002);
   g.gain.exponentialRampToValueAtTime(0.0001,t+0.04);
-  o.connect(g).connect(A.stepBus); o.start(t); o.stop(t+0.05);
+  o.connect(g).connect(env.stepBus); o.start(t); o.stop(t+0.05);
 }
 
 /* ---------- 排程 (16分音符網格, 音樂速度) ---------- */
-function musicBpm(){ return A.bpm/2; }
-function isAccentStep(s){ return A.mode==='even' ? true : (s===0||s===8); }
-
-function scheduleStep(s,t){
-  const sixteenth = 60/musicBpm()/4;
+/* cfg = {musicBpm, mode, vibe, vinyl}; live = 即時狀態物件 (含 vis/step) 或 null */
+function scheduleStep(env, s, t, measure, cfg, live){
+  const sixteenth = 60/cfg.musicBpm/4;
   const measDur = sixteenth*16;
-  const chords = VIBES[A.vibe].chords;
-  const chord = chords[A.measure % chords.length];
+  const chords = VIBES[cfg.vibe].chords;
+  const chord = chords[measure % chords.length];
 
   // 鼓
-  if(s===0||s===8) kick(t);
-  if(s===4||s===12) snare(t);
+  if(s===0||s===8) kick(env,t);
+  if(s===4||s===12) snare(env,t);
   if(s%2===0){ // 八分音符 hi-hat, 偶數帶點 swing
     const swing = (s%4===2)? sixteenth*0.18 : 0;
-    hat(t+swing, s===6||s===14);
+    hat(env,t+swing, s===6||s===14);
   }
   // 和弦 / bass / 旋律
-  if(s===0){ rhodes(chord,t,measDur*0.95); bass(chord[0],t,measDur*0.5); }
-  if(s===8){ bass(chord[1],t,measDur*0.45); }
-  if(s===10 && Math.random()<0.45){ lead(chord[1+Math.floor(Math.random()*3)],t); }
+  if(s===0){ rhodes(env,chord,t,measDur*0.95); bass(env,chord[0],t,measDur*0.5); }
+  if(s===8){ bass(env,chord[1],t,measDur*0.45); }
+  if(s===10 && Math.random()<0.45){ lead(env,chord[1+Math.floor(Math.random()*3)],t); }
 
-  // 黑膠雜訊
-  if(A.vinyl && Math.random()<0.5) crackle(t+Math.random()*sixteenth);
+  // 黑膠雜訊 crackle
+  if(cfg.vinyl && Math.random()<0.5) crackle(env,t+Math.random()*sixteenth);
 
   // 踏步提示 (八分音符 = 每步)
   if(s%2===0){
-    const acc = isAccentStep(s);
-    stepTick(t,acc);
-    A.vis.push({step:A.step,acc:acc,beat:Math.floor(s/4),t:t});
-    A.step++;
+    const acc = cfg.mode==='even' ? true : (s===0||s===8);
+    stepTick(env,t,acc);
+    if(live){ live.vis.push({step:live.step,acc:acc,beat:Math.floor(s/4),t:t}); live.step++; }
   }
 }
+
+function liveCfg(){
+  return {musicBpm:A.bpm/2, mode:A.mode, vibe:A.vibe, vinyl:A.vinyl};
+}
+
+/* ---------- 即時引擎 (前景) ---------- */
 function scheduler(){
-  const sixteenth = 60/musicBpm()/4;
-  while(A.next < A.ctx.currentTime + 0.14){
-    scheduleStep(A.s16, A.next);
+  if(!A.fg || !A.live) return;
+  const cfg = liveCfg();
+  const sixteenth = 60/cfg.musicBpm/4;
+  while(A.next < A.live.ctx.currentTime + 0.14){
+    scheduleStep(A.live, A.s16, A.next, A.measure, cfg, A);
     A.s16 = (A.s16+1)%16;
     if(A.s16===0) A.measure++;
     A.next += sixteenth;
   }
 }
 function draw(){
-  if(!A.running) return;
-  const now=A.ctx.currentTime;
+  if(!A.fg || !A.live) return;
+  const now=A.live.ctx.currentTime;
   while(A.vis.length && A.vis[0].t<=now){ paint(A.vis.shift()); }
   requestAnimationFrame(draw);
 }
@@ -313,6 +330,206 @@ function paint(ev){
   const bs=document.querySelectorAll('#beatrow .b');
   bs.forEach((b,i)=>b.classList.toggle('on', i===ev.beat));
 }
+function clearVisuals(){
+  document.getElementById('footL').classList.remove('on','acc');
+  document.getElementById('footR').classList.remove('on','acc');
+  document.querySelectorAll('#beatrow .b').forEach(b=>b.classList.remove('on'));
+}
+
+function buildLive(){
+  const ctx=new ctxClass();
+  const master=ctx.createGain(); master.gain.value=0.9; master.connect(ctx.destination);
+  const warm=ctx.createBiquadFilter(); warm.type='lowpass'; warm.frequency.value=7200; warm.Q.value=0.3;
+  warm.connect(master);
+  const musicBus=ctx.createGain(); musicBus.gain.value=A.volMusic; musicBus.connect(warm);
+  const stepBus=ctx.createGain(); stepBus.gain.value=A.volStep; stepBus.connect(master);
+  const texBus=ctx.createGain(); texBus.gain.value=0.9; texBus.connect(master);
+  const wd=ctx.createGain(); wd.gain.value=7;
+  const lfo=ctx.createOscillator(); lfo.frequency.value=0.55; lfo.connect(wd); lfo.start();
+  A.live={ctx,master,warm,musicBus,stepBus,texBus,wobble:wd,hiss:null,rainNode:null};
+  // 連續黑膠 hiss
+  const hiss=ctx.createBufferSource(); hiss.buffer=noise(A.live,2); hiss.loop=true;
+  const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=4000;
+  const hg=ctx.createGain(); hg.gain.value=A.vinyl?0.012:0;
+  hiss.connect(hp).connect(hg).connect(texBus); hiss.start();
+  A.live.hiss=hg;
+}
+function startRain(){
+  if(!A.live || A.live.rainNode) return;
+  const ctx=A.live.ctx;
+  const src=ctx.createBufferSource(); src.buffer=noise(A.live,2); src.loop=true;
+  const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=3200; bp.Q.value=0.4;
+  const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=6500;
+  const g=ctx.createGain(); g.gain.value=0.0001;
+  src.connect(bp).connect(lp).connect(g).connect(A.live.texBus); src.start();
+  g.gain.exponentialRampToValueAtTime(0.09,ctx.currentTime+0.8);
+  A.live.rainNode={src:src,gain:g};
+}
+function stopRain(){
+  if(!A.live || !A.live.rainNode) return;
+  const ctx=A.live.ctx, r=A.live.rainNode; A.live.rainNode=null;
+  r.gain.gain.exponentialRampToValueAtTime(0.0001,ctx.currentTime+0.5);
+  r.src.stop(ctx.currentTime+0.6);
+}
+
+/* ---------- 離線渲染：把目前設定算成一段無縫循環音檔 ---------- */
+function buildOfflineTexture(env,cfg,dur){
+  if(cfg.vinyl){
+    const hiss=env.ctx.createBufferSource(); hiss.buffer=noise(env,2); hiss.loop=true;
+    const hp=env.ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=4000;
+    const g=env.ctx.createGain(); g.gain.value=0.012;
+    hiss.connect(hp).connect(g).connect(env.texBus); hiss.start(0); hiss.stop(dur);
+  }
+  if(cfg.rain){
+    const src=env.ctx.createBufferSource(); src.buffer=noise(env,2); src.loop=true;
+    const bp=env.ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=3200; bp.Q.value=0.4;
+    const lp=env.ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=6500;
+    const g=env.ctx.createGain(); g.gain.value=0.09;
+    src.connect(bp).connect(lp).connect(g).connect(env.texBus); src.start(0); src.stop(dur);
+  }
+}
+function encodeWav(samples, sr){
+  const len=samples.length;
+  const ab=new ArrayBuffer(44+len*2); const v=new DataView(ab);
+  const ws=(o,s)=>{ for(let i=0;i<s.length;i++) v.setUint8(o+i,s.charCodeAt(i)); };
+  ws(0,'RIFF'); v.setUint32(4,36+len*2,true); ws(8,'WAVE'); ws(12,'fmt ');
+  v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+  v.setUint32(24,sr,true); v.setUint32(28,sr*2,true); v.setUint16(32,2,true); v.setUint16(34,16,true);
+  ws(36,'data'); v.setUint32(40,len*2,true);
+  let o=44;
+  for(let i=0;i<len;i++){ let x=Math.max(-1,Math.min(1,samples[i])); v.setInt16(o,x<0?x*0x8000:x*0x7FFF,true); o+=2; }
+  return new Blob([ab],{type:'audio/wav'});
+}
+async function renderLoop(cfg){
+  const sixteenth = 60/cfg.musicBpm/4;
+  const measDur = sixteenth*16;
+  const loopDur = measDur*LOOP_MEASURES;
+  const sr = 44100;
+  const total = loopDur + LOOP_TAIL;
+  const octx = new OfflineCtxClass(1, Math.ceil(total*sr), sr);
+  // 匯流排拓樸與即時引擎一致；音量/雜訊/雨聲都在此烤進音檔
+  const master=octx.createGain(); master.gain.value=0.9; master.connect(octx.destination);
+  const warm=octx.createBiquadFilter(); warm.type='lowpass'; warm.frequency.value=7200; warm.Q.value=0.3;
+  warm.connect(master);
+  const musicBus=octx.createGain(); musicBus.gain.value=cfg.volMusic; musicBus.connect(warm);
+  const stepBus=octx.createGain(); stepBus.gain.value=cfg.volStep; stepBus.connect(master);
+  const texBus=octx.createGain(); texBus.gain.value=0.9; texBus.connect(master);
+  const wd=octx.createGain(); wd.gain.value=7;
+  const lfo=octx.createOscillator(); lfo.frequency.value=0.55; lfo.connect(wd); lfo.start();
+  const env={ctx:octx, musicBus, stepBus, texBus, wobble:wd};
+
+  buildOfflineTexture(env, cfg, total);
+  const stepCfg = {musicBpm:cfg.musicBpm, mode:cfg.mode, vibe:cfg.vibe, vinyl:cfg.vinyl};
+  for(let m=0;m<LOOP_MEASURES;m++){
+    for(let s=0;s<16;s++){
+      scheduleStep(env, s, (m*16+s)*sixteenth, m, stepCfg, null);
+    }
+  }
+  const rendered = await octx.startRendering();
+  const data = rendered.getChannelData(0);
+  const loopLen = Math.round(loopDur*sr);
+  const out = new Float32Array(loopLen);
+  out.set(data.subarray(0, loopLen));
+  // 尾巴折回開頭 (overlap-add) → 無縫接縫
+  const tailLen = Math.min(data.length-loopLen, Math.floor(LOOP_TAIL*sr));
+  for(let i=0;i<tailLen;i++) out[i] += data[loopLen+i];
+  return URL.createObjectURL(encodeWav(out, sr));
+}
+
+function renderCfg(){
+  return {musicBpm:A.bpm/2, mode:A.mode, vibe:A.vibe, vinyl:A.vinyl, rain:A.rain,
+          volMusic:A.volMusic, volStep:A.volStep};
+}
+async function refreshLoop(){
+  if(!A.running || A.bg.rendering) return;
+  A.bg.rendering=true;
+  try{
+    const url = await renderLoop(renderCfg());
+    if(!A.running){ URL.revokeObjectURL(url); return; }
+    if(A.bg.url) URL.revokeObjectURL(A.bg.url);
+    A.bg.url=url;
+    if(A.fg && A.bg.el){ A.bg.el.src=url; A.bg.el.load(); }  // 前景時預載，背景接手用
+  }catch(e){ /* 渲染失敗就沿用舊的循環 */ }
+  finally{ A.bg.rendering=false; }
+}
+let _refreshTimer=null;
+function scheduleRefresh(){
+  if(!A.running) return;
+  clearTimeout(_refreshTimer);
+  _refreshTimer=setTimeout(refreshLoop,250);
+}
+
+/* 靜音 WAV：用使用者點擊的手勢「解鎖」<audio>，之後才能在背景以程式 play() */
+const SILENT_URL = URL.createObjectURL(encodeWav(new Float32Array(2400), 8000));
+
+/* ---------- 前景/背景接手 ---------- */
+function loopDurNow(){ return 16*LOOP_MEASURES*(60/(A.bpm/2)/4); }
+function goBackground(){
+  if(!A.running || !A.fg) return;
+  A.fg=false;
+  clearInterval(A.timer); A.timer=null;
+  const el=A.bg.el;
+  if(el && A.bg.url){
+    const sixteenth=60/(A.bpm/2)/4;
+    const pos=(((A.measure%LOOP_MEASURES)*16 + A.s16)*sixteenth) % loopDurNow();
+    if(el.src!==A.bg.url){ el.src=A.bg.url; el.load(); }
+    try{ el.currentTime=pos; }catch(e){}
+    el.volume=0;
+    const pr=el.play(); if(pr&&pr.catch) pr.catch(()=>{});
+    let v=0; clearInterval(A._fade);
+    A._fade=setInterval(()=>{ v=Math.min(1,v+0.12); el.volume=v; if(v>=1) clearInterval(A._fade); },20);
+  }
+  if(A.live && A.live.ctx.state==='running') A.live.ctx.suspend();
+  if('mediaSession' in navigator) navigator.mediaSession.playbackState='playing';
+}
+function goForeground(){
+  if(!A.running || A.fg) return;
+  A.fg=true;
+  const el=A.bg.el;
+  clearInterval(A._fade);
+  const resumeAt = (el && !isNaN(el.currentTime)) ? el.currentTime : 0;
+  if(el){ el.pause(); }
+  if(A.live){
+    A.live.ctx.resume();
+    const sixteenth=60/(A.bpm/2)/4;
+    // 回前景時即時引擎從對應小節的下一個下拍重新接上 (步伐左右對齊)
+    A.measure = Math.floor(resumeAt/(16*sixteenth)) % LOOP_MEASURES;
+    A.s16=0; A.step=0; A.vis=[];
+    A.next=A.live.ctx.currentTime+0.08;
+    A.timer=setInterval(scheduler,25);
+    requestAnimationFrame(draw);
+  }
+  if(A.bg.url && el && el.src!==A.bg.url){ el.src=A.bg.url; el.load(); }
+}
+
+/* ---------- MediaSession 鎖屏控制 ---------- */
+function updateMedia(){
+  if(!('mediaSession' in navigator)) return;
+  try{
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title:`Cadence ${A.bpm} SPM`,
+      artist:`${VIBE_NAMES[A.vibe]} · ${A.mode==='13'?'重拍 1·3':'平均拍'}`,
+      album:'running-cadence-lofi'
+    });
+  }catch(e){}
+}
+function setupMediaSession(){
+  if(!('mediaSession' in navigator)) return;
+  try{
+    navigator.mediaSession.setActionHandler('pause', ()=>{
+      const el=A.bg.el;
+      if(!A.fg && el && !el.paused){ el.pause(); navigator.mediaSession.playbackState='paused'; }
+      else stop();
+    });
+    navigator.mediaSession.setActionHandler('play', ()=>{
+      const el=A.bg.el;
+      if(A.running && !A.fg && el && el.paused && A.bg.url){
+        el.play(); navigator.mediaSession.playbackState='playing';
+      } else if(!A.running){ start(); }
+    });
+    navigator.mediaSession.setActionHandler('stop', ()=>stop());
+  }catch(e){}
+}
 
 /* ---------- 控制 ---------- */
 function setBpm(v){
@@ -321,59 +538,37 @@ function setBpm(v){
   document.getElementById('bpmVal').textContent=A.bpm;
   document.getElementById('bpmSub').textContent=`音樂速度 ${Math.round(A.bpm/2)} BPM · 每拍兩步`;
   document.getElementById('bpm').style.setProperty('--pct',((A.bpm-140)/50*100)+'%');
+  if(A.live){ /* 即時速度由 scheduler 讀取，無需額外動作 */ }
+  updateMedia(); scheduleRefresh();
 }
-function buildTexture(){
-  // 連續黑膠 hiss
-  const hiss=A.ctx.createBufferSource(); hiss.buffer=noise(2); hiss.loop=true;
-  const hp=A.ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=4000;
-  const g=A.ctx.createGain(); g.gain.value=A.vinyl?0.012:0;
-  hiss.connect(hp).connect(g).connect(A.texBus); hiss.start();
-  A.hissNode={src:hiss,gain:g};
-}
-function startRain(){
-  if(A.rainNode) return;
-  const src=A.ctx.createBufferSource(); src.buffer=noise(2); src.loop=true;
-  const bp=A.ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=3200; bp.Q.value=0.4;
-  const lp=A.ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=6500;
-  const g=A.ctx.createGain(); g.gain.value=0.0001;
-  src.connect(bp).connect(lp).connect(g).connect(A.texBus); src.start();
-  g.gain.exponentialRampToValueAtTime(0.09,A.ctx.currentTime+0.8);
-  A.rainNode={src:src,gain:g};
-}
-function stopRain(){
-  if(!A.rainNode) return;
-  const r=A.rainNode; A.rainNode=null;
-  r.gain.gain.exponentialRampToValueAtTime(0.0001,A.ctx.currentTime+0.5);
-  r.src.stop(A.ctx.currentTime+0.6);
-}
+
 function start(){
-  if(!A.ctx){
-    A.ctx=new ctxClass();
-    A.master=A.ctx.createGain(); A.master.gain.value=0.9; A.master.connect(A.ctx.destination);
-    A.warm=A.ctx.createBiquadFilter(); A.warm.type='lowpass'; A.warm.frequency.value=7200; A.warm.Q.value=0.3;
-    A.warm.connect(A.master);
-    A.musicBus=A.ctx.createGain(); A.musicBus.gain.value=A.volMusic; A.musicBus.connect(A.warm);
-    A.stepBus=A.ctx.createGain(); A.stepBus.gain.value=A.volStep; A.stepBus.connect(A.master);
-    A.texBus=A.ctx.createGain(); A.texBus.gain.value=0.9; A.texBus.connect(A.master);
-    A.wobbleLFO=A.ctx.createOscillator(); const wd=A.ctx.createGain();
-    A.wobbleLFO.frequency.value=0.55; wd.gain.value=7; A.wobbleLFO.connect(wd);
-    A.wobbleLFO=wd; // expose the depth-scaled signal
-    const lfo=A.ctx.createOscillator(); lfo.frequency.value=0.55; lfo.connect(wd); lfo.start();
-    buildTexture();
-  }
-  A.ctx.resume();
-  A.s16=0; A.measure=0; A.step=0; A.vis=[]; A.next=A.ctx.currentTime+0.1;
-  A.running=true;
+  if(!A.live) buildLive();
+  A.live.ctx.resume();
+  A.running=true; A.fg=true;
+  A.s16=0; A.measure=0; A.step=0; A.vis=[]; A.next=A.live.ctx.currentTime+0.1;
   if(A.rain) startRain();
+  // 用此次點擊手勢解鎖背景 <audio>
+  try{
+    A.bg.el.src=SILENT_URL;
+    const p=A.bg.el.play();
+    if(p&&p.then) p.then(()=>A.bg.el.pause()).catch(()=>{});
+  }catch(e){}
+  refreshLoop();                       // 非同步渲染背景循環
   A.timer=setInterval(scheduler,25);
   requestAnimationFrame(draw);
+  updateMedia();
+  if('mediaSession' in navigator) navigator.mediaSession.playbackState='playing';
   const p=document.getElementById('play'); p.textContent='停止'; p.classList.add('running');
 }
 function stop(){
-  A.running=false; clearInterval(A.timer); stopRain();
-  document.getElementById('footL').classList.remove('on','acc');
-  document.getElementById('footR').classList.remove('on','acc');
-  document.querySelectorAll('#beatrow .b').forEach(b=>b.classList.remove('on'));
+  A.running=false; A.fg=false;
+  clearInterval(A.timer); A.timer=null;
+  clearInterval(A._fade); clearTimeout(_refreshTimer);
+  if(A.bg.el){ A.bg.el.pause(); }
+  if(A.live){ stopRain(); }
+  clearVisuals();
+  if('mediaSession' in navigator) navigator.mediaSession.playbackState='paused';
   const p=document.getElementById('play'); p.textContent='開始'; p.classList.remove('running');
 }
 
@@ -386,29 +581,49 @@ function setMode(m){
   document.querySelectorAll('#modes button').forEach(b=>b.classList.toggle('on',b.dataset.mode===m));
   document.getElementById('modeTag').textContent = m==='13'?'重拍 1 & 3':'平均拍';
   document.getElementById('note').innerHTML=NOTES[m];
+  updateMedia(); scheduleRefresh();
 }
 function setVibe(v){
   A.vibe=v;
   document.querySelectorAll('#vibes button').forEach(b=>b.classList.toggle('on',b.dataset.vibe===v));
+  updateMedia(); scheduleRefresh();
 }
 
 document.getElementById('bpm').addEventListener('input',e=>setBpm(+e.target.value));
 document.getElementById('plus').addEventListener('click',()=>setBpm(A.bpm+1));
 document.getElementById('minus').addEventListener('click',()=>setBpm(A.bpm-1));
-document.getElementById('volMusic').addEventListener('input',e=>{A.volMusic=+e.target.value/100; if(A.musicBus)A.musicBus.gain.value=A.volMusic;});
-document.getElementById('volStep').addEventListener('input',e=>{A.volStep=+e.target.value/100; if(A.stepBus)A.stepBus.gain.value=A.volStep;});
+document.getElementById('volMusic').addEventListener('input',e=>{
+  A.volMusic=+e.target.value/100;
+  if(A.live) A.live.musicBus.gain.value=A.volMusic;
+  scheduleRefresh();
+});
+document.getElementById('volStep').addEventListener('input',e=>{
+  A.volStep=+e.target.value/100;
+  if(A.live) A.live.stepBus.gain.value=A.volStep;
+  scheduleRefresh();
+});
 document.getElementById('modes').addEventListener('click',e=>{const b=e.target.closest('button'); if(b)setMode(b.dataset.mode);});
 document.getElementById('vibes').addEventListener('click',e=>{const b=e.target.closest('button'); if(b)setVibe(b.dataset.vibe);});
 document.getElementById('togVinyl').addEventListener('click',e=>{
   A.vinyl=!A.vinyl; e.target.classList.toggle('on',A.vinyl);
-  if(A.hissNode) A.hissNode.gain.gain.value=A.vinyl?0.012:0;
+  if(A.live && A.live.hiss) A.live.hiss.gain.value=A.vinyl?0.012:0;
+  scheduleRefresh();
 });
 document.getElementById('togRain').addEventListener('click',e=>{
   A.rain=!A.rain; e.target.classList.toggle('on',A.rain);
-  if(A.running){ A.rain?startRain():stopRain(); }
+  if(A.fg){ A.rain?startRain():stopRain(); }
+  scheduleRefresh();
 });
 document.getElementById('play').addEventListener('click',()=>A.running?stop():start());
 
+document.addEventListener('visibilitychange',()=>{
+  if(!A.running) return;
+  if(document.hidden) goBackground(); else goForeground();
+});
+window.addEventListener('pagehide',()=>{ if(A.running && A.fg) goBackground(); });
+
+A.bg.el=document.getElementById('bgLoop');
+setupMediaSession();
 setBpm(160); setMode('13'); setVibe('dusk');
 </script>
 </body>
