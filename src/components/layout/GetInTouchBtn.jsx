@@ -6,7 +6,7 @@ export default function GetInTouchBtn() {
 
   return (
     <a
-      href="mailto:easy0110111@gmail.com"
+      href="mailto:yichenlinez@gmail.com"
       className={`${styles.btn} ${!isVisible ? styles.hidden : ''}`}
     >
       Mail

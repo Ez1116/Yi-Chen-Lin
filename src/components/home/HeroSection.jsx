@@ -76,8 +76,8 @@ export default function HeroSection({ shouldAnimate }) {
                 <span key={tag} className={styles.tag}>{tag}</span>
               ))}
             </div>
-            <a href="mailto:easy0110111@gmail.com" className={styles.emailLink}>
-              easy0110111@gmail.com
+            <a href="mailto:yichenlinez@gmail.com" className={styles.emailLink}>
+              yichenlinez@gmail.com
             </a>
           </div>
         </div>
