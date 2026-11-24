@@ -58,7 +58,7 @@ export default function HeroSection({ shouldAnimate }) {
           />
         </div>
         <div className={styles.textCol}>
-          <h1 className={styles.name}>Yi-Chen Lin</h1>
+          <h1 className={styles.name}>Yi-Chen Lin (EZ)</h1>
           <p className={styles.position}>Ph.D. Candidate in Science Education</p>
           <p className={styles.institution}>National Taiwan Normal University</p>
 

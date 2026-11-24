@@ -7,13 +7,6 @@ export default function NavBar() {
   return (
     <header className={styles.header}>
       <nav className={styles.navBar} aria-label="Main navigation">
-        <button
-          className={styles.wordmark}
-          onClick={() => navigateTo('home')}
-          aria-label="Go to home page"
-        >
-          YC Lin
-        </button>
         <div className={styles.navLinks}>
           <button
             className={`${styles.navBtn} ${currentPage === 'home' ? styles.active : ''}`}
