@@ -16,21 +16,4 @@ export const projects = [
       { number: '2', label: 'Templates' },
     ],
   },
-  {
-    id: 'label',
-    frontClass: 'label',
-    image: '/label.png',
-    imageAlt: 'GitHub Resources',
-    title: 'GitHub Resources',
-    subtitle: 'Code Repository & Notes',
-    backTitle: 'Coding Notes',
-    description:
-      'This repository contains interactive web-based tools, visualizations for data analysis and statistical concepts, educational survey automation scripts, and research tools, primarily designed in Traditional Chinese.',
-    link: 'https://github.com/Ez1116/coding-note',
-    linkText: 'View Repository',
-    stats: [
-      { number: 'Free', label: 'To use' },
-      { number: '8', label: 'Tools' },
-    ],
-  },
 ];

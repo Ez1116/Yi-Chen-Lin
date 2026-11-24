@@ -4,6 +4,7 @@ import NavBar from './components/layout/NavBar';
 import HomePage from './components/pages/HomePage';
 import DeveloperPage from './components/pages/DeveloperPage';
 import PublicationsPage from './components/pages/PublicationsPage';
+import ActivityPage from './components/pages/ActivityPage';
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState('home');
@@ -38,6 +39,10 @@ export default function App() {
       <PublicationsPage
         isActive={currentPage === 'publications'}
         isSlidingOut={slidingOutPage === 'publications'}
+      />
+      <ActivityPage
+        isActive={currentPage === 'activity'}
+        isSlidingOut={slidingOutPage === 'activity'}
       />
     </AppContext.Provider>
   );

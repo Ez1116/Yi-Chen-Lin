@@ -5,9 +5,9 @@ export const publications = [
     authors: 'Sui, C. J., Yen, M. H., Lin, Y. C., Wang, C. Y., & Chang, C. Y.',
     title: 'Does self-regulated learning happen? Learning socio-scientific argumentation through self-Assessment strategies',
     journal: 'International Journal of Science Education',
-    volume: '',
-    issue: '',
-    pages: '1–25',
+    volume: '48',
+    issue: '16',
+    pages: '2719–2743',
     doi: '10.1080/09500693.2025.2537143',
   },
   {

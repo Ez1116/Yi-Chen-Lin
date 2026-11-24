@@ -100,3 +100,10 @@
     padding: 20px;
   }
 }
+
+.ownerName {
+  background: var(--color-primary-light);
+  color: inherit;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
