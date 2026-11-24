@@ -13,7 +13,7 @@ export default function ActivityPage({ isActive, isSlidingOut }) {
       ].join(' ')}
     >
       <div className={styles.contentContainer}>
-        <h1 className={styles.pageTitle}>Activity</h1>
+        <h1 className={styles.pageTitle}>Activities</h1>
         <p className={styles.pageSubtitle}>
           Conference presentations and invited talks
         </p>

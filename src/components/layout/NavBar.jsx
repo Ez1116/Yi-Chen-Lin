@@ -20,7 +20,7 @@ export default function NavBar() {
             onClick={() => navigateTo('publications')}
             aria-current={currentPage === 'publications' ? 'page' : undefined}
           >
-            Publications
+            Publication
           </button>
           <button
             className={`${styles.navBtn} ${currentPage === 'activity' ? styles.active : ''}`}
@@ -34,7 +34,7 @@ export default function NavBar() {
             onClick={() => navigateTo('developer')}
             aria-current={currentPage === 'developer' ? 'page' : undefined}
           >
-            Resources
+            Resource
           </button>
         </div>
       </nav>
